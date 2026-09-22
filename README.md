@@ -255,3 +255,7 @@ The frontend has been redesigned to follow the selected Reference C premium SaaS
 
 ## Sidebar + dashboard visualization update — 22 Sep 2026
 Desktop and mobile now use the same left-sidebar navigation model. On mobile the sidebar opens from a menu button as a slide-in drawer; the previous fixed footer navigation is removed. The dashboard now includes a premium activity graph, workflow-health visualization and live-status styling. This is presentation-only and does not alter APIs or the diagnostic workflow.
+
+
+## Workspace bootstrap/cache fix — 22 Sep 2026
+The browser application shell now uses a fresh frontend asset version and a resilient startup path. Local storage access is guarded, startup waits for DOM readiness when needed, and initialization errors surface through the existing workspace error screen instead of leaving the initial “Loading workspace…” shell stuck. No backend workflow or database data is changed.
