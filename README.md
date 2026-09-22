@@ -278,3 +278,12 @@ The OCR service has been strengthened for real photographed analyzer slips. It n
 
 ## Upload/OCR progress messaging — 22 Sep 2026
 The New Report upload surface now gives visible, human-readable progress while an analyzer slip is being processed: Ready to upload → Uploading slip → Creating report job → Reading analyzer slip with OCR → Checking extracted data → OCR complete / technician review. Duplicate images are detected against previously uploaded centre reports and are reported clearly instead of silently creating another report. If an upload succeeds but OCR itself fails, the UI keeps the report and explicitly tells the technician that OCR needs attention rather than showing a blank or generic failure.
+
+
+## Fast OCR intake + Pending Verification queue — 22 Sep 2026
+
+The upload path has been changed so the technician no longer waits for Tesseract OCR to finish before the upload request returns. Image hashing, duplicate detection, file storage and report-job creation happen in the request; OCR now runs in a background task and changes the report from `OCR_PROCESSING` to `OCR_REVIEW` when extraction is ready.
+
+A new **Pending Verification** workspace entry lets staff upload multiple slips first and review them later from one queue. Processing jobs show live polling status; completed OCR jobs show a Review action that opens the existing editable technician verification screen. This does not change the authoritative workflow: OCR remains draft data and technician approval is still required before PDF generation.
+
+The upload screen now returns to the queue after the report job is created instead of waiting for OCR. This is intended to make high-volume Android intake substantially more responsive while keeping the existing report/PDF/payment/WhatsApp workflow intact.
