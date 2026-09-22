@@ -1,5 +1,4 @@
 import base64,hashlib,hmac,json,time
-from cryptography.fernet import Fernet,InvalidToken
 from fastapi import APIRouter,Depends,Form,HTTPException,Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -10,14 +9,20 @@ from .config import SECRET_KEY
 
 router=APIRouter()
 
-def _fernet():
-    key=base64.urlsafe_b64encode(hashlib.sha256((SECRET_KEY+"|aarogyam-superadmin-settings").encode()).digest())
-    return Fernet(key)
+def encrypt_secret(value):
+    # Android/Termux-safe reversible storage for the local prototype.
+    # Production deployment should replace this with a real secret manager/encryption key.
+    key=hashlib.sha256(SECRET_KEY.encode()).digest()
+    raw=value.encode()
+    return base64.urlsafe_b64encode(bytes(b ^ key[i % len(key)] for i,b in enumerate(raw))).decode()
 
-def encrypt_secret(value): return _fernet().encrypt(value.encode()).decode()
 def decrypt_secret(value):
-    try:return _fernet().decrypt(value.encode()).decode()
-    except (InvalidToken,ValueError,TypeError):return ""
+    try:
+        key=hashlib.sha256(SECRET_KEY.encode()).digest()
+        raw=base64.urlsafe_b64decode(value.encode())
+        return bytes(b ^ key[i % len(key)] for i,b in enumerate(raw)).decode()
+    except Exception:
+        return ""
 
 def super_token(admin_id):
     body=json.dumps({"sid":int(admin_id),"role":"superadmin","exp":int(time.time())+43200},separators=(",",":")).encode()
