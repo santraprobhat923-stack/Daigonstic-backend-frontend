@@ -1,7 +1,7 @@
 import json,secrets
 from pathlib import Path
 from fastapi import FastAPI,UploadFile,File,Form,HTTPException,Request,Depends
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse,HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -41,7 +41,13 @@ def current(request:Request,db:Session=Depends(get_db)):
     if not c: raise HTTPException(401,"Centre not found")
     return c
 @app.get("/")
-def home(): return FileResponse("frontend/index.html")
+def home():
+    # Read the HTML directly instead of FileResponse. This avoids a Content-Length
+    # mismatch observed on Android/Termux shared storage when serving the app shell.
+    index_path=Path("frontend/index.html")
+    if not index_path.is_file():
+        raise HTTPException(500,"Frontend index.html not found")
+    return HTMLResponse(index_path.read_text(encoding="utf-8"))
 @app.get("/health")
 def health(): return {"status":"ok"}
 @app.post("/api/bootstrap")
