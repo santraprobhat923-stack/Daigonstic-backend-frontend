@@ -31,6 +31,11 @@ def migrate_legacy_sqlite():
             cols=[x[1] for x in conn.execute(text("PRAGMA table_info(reports)"))]
             if "image_hashes" not in cols: conn.execute(text("ALTER TABLE reports ADD COLUMN image_hashes TEXT DEFAULT '[]'"))
             if "token" not in cols: conn.execute(text("ALTER TABLE reports ADD COLUMN token VARCHAR"))
+        if "wa_jobs" in tables:
+            cols=[x[1] for x in conn.execute(text("PRAGMA table_info(wa_jobs)"))]
+            if "attempt_count" not in cols: conn.execute(text("ALTER TABLE wa_jobs ADD COLUMN attempt_count INTEGER DEFAULT 0"))
+            if "last_error" not in cols: conn.execute(text("ALTER TABLE wa_jobs ADD COLUMN last_error TEXT DEFAULT ''"))
+            if "next_attempt_at" not in cols: conn.execute(text("ALTER TABLE wa_jobs ADD COLUMN next_attempt_at DATETIME"))
 migrate_legacy_sqlite()
 app=FastAPI(title="Aarogyam")
 app.mount("/static",StaticFiles(directory="frontend"),name="static")
@@ -154,7 +159,7 @@ def payment(rid:int,amount:float=Form(...),status:str=Form(...),c=Depends(curren
     r.charge=amount
     if not c.whatsapp_enabled: r.payment="NOT_REQUIRED"; r.status="GENERATED"
     elif status=="PAID":
-        r.payment="PAID"; r.status="RELEASED"; notify(db,c.id,r.id,"PAYMENT_RECEIVED",f"Payment received for report #{r.id}. Report released."); queue_wa(db,c,r,"FINAL_REPORT",{"phone":r.patient_phone,"url":f"/patient/report/{r.token}"})
+        r.payment="PAID"; r.status="RELEASED"; notify(db,c.id,r.id,"PAYMENT_RECEIVED",f"Payment received for report #{r.id}. Report released."); queue_wa(db,c,r,"FINAL_REPORT",{"phone":r.patient_phone,"patient_name":r.patient_name or "Patient","url":f"/patient/report/{r.token}","filename":f"Aarogyam_Report_{r.id}.pdf"})
     else:
         r.payment="DUE"; r.status="PAYMENT_PENDING"; queue_wa(db,c,r,"PAYMENT_REQUEST",{"phone":r.patient_phone,"amount":amount,"upi":c.upi_id})
     db.commit(); return report_dict(r)
