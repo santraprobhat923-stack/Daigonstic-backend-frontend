@@ -106,6 +106,77 @@ Every report, notification, setting, credit balance, template and WhatsApp job b
 - Patient token access.
 - Legacy SQLite migration protection.
 - Mobile-friendly frontend.
+- Professional responsive centre UI styling.
+- Authenticated PDF download using a bearer-aware fetch flow.
+- Frontend cache-busting for index/app assets.
+- Startup loading state instead of an empty page.
+- Frontend startup/error handling so JavaScript failures produce a visible error screen rather than a completely blank page.
+- DOM access hardened to use explicit element lookups instead of relying on browser-created global variables from element IDs.
+- Current frontend commits: f045f522d88df635bea93c4fb89bc5c042723e6e and e47de8551ebe5b6a7390d91129e01b16ec590151.
+
+## Current test/deployment status — 22 Sep 2026
+The project has been pulled into a fresh Android/Termux working directory and the FastAPI server has successfully reached the frontend.
+
+Observed healthy requests:
+- GET / → 200 OK
+- GET /static/css/app.css → 200 OK / 304
+- GET /static/js/app.js → 200 OK / 304
+
+A favicon.ico 404 was observed. This is harmless and does not affect application functionality.
+
+### Latest issue and fix
+The browser displayed a completely blank page even though FastAPI was returning 200 OK. The frontend was patched directly in GitHub.
+
+The fix:
+1. Added cache-busting query strings to CSS and JavaScript assets.
+2. Added a visible initial loading screen.
+3. Hardened frontend startup with explicit DOM element lookups.
+4. Hardened login, upload, verification, payment, reports, settings and search interactions against browser global-ID behavior.
+5. Added visible startup/error handling instead of leaving an empty <main> area.
+6. Preserved the existing backend/database and did NOT require deleting the database or centre account.
+
+After pulling the latest main branch, restart:
+uvicorn backend.main:app --host 0.0.0.0 --port 8000
+
+Then refresh Chrome.
+
+### Current centre account status
+A centre account has already been created successfully through the Aarogyam UI. Do not instruct the owner to recreate the centre unless the database is intentionally reset.
+
+## OCR progress
+Patient credential extraction is working on the tested analyzer image.
+
+Earlier thyroid test extraction was incomplete: Free T4 was detected while T3/TSH and values/units were incorrectly parsed. The OCR parser in backend/services.py was subsequently upgraded with broader laboratory-unit recognition, normal result-row parsing, table-like OCR parsing, cleanup and deduplication.
+
+This parser still needs real-world validation against thyroid, CBC, stool and chemistry images. OCR remains draft data until technician verification.
+
+## PDF/template progress
+The centre can upload a blank PDF template in Settings. The template is stored under the centre's storage and generated reports are overlaid onto it.
+
+The centre-side generated PDF download feature has been implemented:
+- Generated report download uses the authenticated bearer token.
+- Downloads do not require payment.
+- Download filename is Aarogyam_Report_<id>.pdf.
+- Reports with generated PDFs show a Download button in Reports.
+- The post-generation screen shows Download Generated PDF.
+
+Important: template coordinate placement is not yet considered production-final. Real centre templates must be tested to ensure body content stays inside the blank body area and never overlaps logos, headers or footers.
+
+## Current known technical work remaining
+1. Validate the latest frontend on Android Chrome after pulling the two frontend fixes.
+2. Test full workflow with actual analyzer images.
+3. Re-test thyroid extraction and confirm T3, TSH, Free T4, values and units.
+4. Test CBC, stool and chemistry OCR.
+5. Generate a report using a real centre PDF template and verify body placement.
+6. Verify generated PDF download on Android Chrome.
+7. Validate payment and automatic WhatsApp behavior with WhatsApp OFF and ON.
+8. Test patient token release/download and centre notification.
+9. Strengthen atomic credit deduction/idempotency before production.
+10. Improve WhatsApp retry/backoff/dead-letter handling.
+11. Configure PostgreSQL and persistent storage for production.
+12. Perform production security review: file validation, rate limits, token expiry/revocation, tenant isolation and backups.
+13. Validate Meta WhatsApp Cloud API delivery only after public HTTPS and valid credentials are configured.
+14. Add the future Super Admin controls, including dynamic credit pricing.
 
 ## WhatsApp environment
 Default: WHATSAPP_PROVIDER=mock.
