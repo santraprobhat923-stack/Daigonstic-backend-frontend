@@ -46,5 +46,8 @@ class WAJob(Base):
     kind=Column(String)
     status=Column(String,default="PENDING")
     payload=Column(Text)
+    attempt_count=Column(Integer,default=0,nullable=False)
+    last_error=Column(Text,default="")
+    next_attempt_at=Column(DateTime,nullable=True)
     created_at=Column(DateTime,default=datetime.utcnow)
     __table_args__=(UniqueConstraint("report_id","kind",name="uq_wa_report_kind"),)
