@@ -208,6 +208,53 @@ OCR is only a draft. Technician verification is authoritative. Report formats va
 ## Credits
 1 credit = 1 report generation. Default configured price is ₹2.50/credit. Downloads do not consume credits. Future Super Admin must be able to change pricing dynamically.
 
+
+## Centre Credits & Razorpay Recharge — 22 Sep 2026
+
+The centre credit system is now implemented in the restarted `Daigonstic-backend-frontend` repository.
+
+### Credit rules
+- **1 credit = 1 generated report.**
+- Default price: **₹2.50 per credit**.
+- Centre PDF downloads do not consume credits.
+- Credits are tenant-scoped to the centre.
+- A credit is deducted only when technician verification generates the report PDF.
+- Re-verifying an already generated report does not deduct another credit.
+- Every recharge and report-credit usage is recorded in a credit transaction ledger.
+
+### Recharge flow
+Centre Admin → **Credits & Recharge** → choose credit quantity → Razorpay Checkout → UPI/payment method → server-side Razorpay signature verification → credits added automatically.
+
+Preset packages:
+- 100 credits
+- 250 credits
+- 500 credits
+- 1,000 credits
+- Custom quantity
+
+The centre never enters a UTR for the Razorpay flow.
+
+### Razorpay configuration
+Set these server environment variables before testing live/test payments:
+
+`RAZORPAY_KEY_ID`  
+`RAZORPAY_KEY_SECRET`  
+`RAZORPAY_WEBHOOK_SECRET`
+
+The backend creates Razorpay orders and calculates the amount from the server-side `CREDIT_PRICE_INR`; the browser cannot choose the price.
+
+The payment verification endpoint validates the Razorpay signature before adding credits. A Razorpay `payment.captured` webhook is also supported for asynchronous confirmation and idempotent recharge recording.
+
+### Credit ledger
+The backend stores:
+- `credit_orders` — centre, Razorpay order, credit quantity, amount and payment status.
+- `credit_transactions` — recharge and report-usage entries, including Razorpay payment ID where applicable.
+
+The centre UI shows the current balance and recent transaction history.
+
+### Current UI
+A **Credits & Recharge** section is available in the desktop sidebar and mobile drawer. The dashboard credit KPI remains visible, and recharge packages open Razorpay Checkout.
+
 ## Production checklist
 - Deploy on the actual server.
 - Use persistent STORAGE_DIR.
