@@ -7,7 +7,7 @@ from ..config import (
     WHATSAPP_TEMPLATE_LANG
 )
 from ..database import SessionLocal
-from ..models import WAJob
+from ..models import WAJob,Notification
 try:
     import requests
 except Exception:
@@ -87,11 +87,23 @@ def _process_job(db,job):
             job.status="SENT"
             job.last_error=""
             job.next_attempt_at=None
+            db.add(Notification(
+                centre_id=job.centre_id,
+                report_id=job.report_id,
+                kind="WHATSAPP_SENT",
+                message=f"{job.kind.replace('_',' ').title()} queued message sent for report #{job.report_id}."
+            ))
         else:
             if job.attempt_count>=MAX_ATTEMPTS:
                 job.status="DEAD_LETTER"
                 job.last_error=detail
                 job.next_attempt_at=None
+                db.add(Notification(
+                    centre_id=job.centre_id,
+                    report_id=job.report_id,
+                    kind="WHATSAPP_DEAD_LETTER",
+                    message=f"{job.kind.replace('_',' ').title()} failed after {job.attempt_count} attempts for report #{job.report_id}: {detail}"
+                ))
             else:
                 job.status="RETRY"
                 job.last_error=detail
