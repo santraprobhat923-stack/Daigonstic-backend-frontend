@@ -81,8 +81,10 @@ def settings(a=Depends(super_admin),db:Session=Depends(get_db)):
 @router.put("/api/superadmin/settings")
 def save_settings(razorpay_mode:str=Form("test"),razorpay_key_id:str=Form(""),razorpay_key_secret:str=Form(""),razorpay_webhook_secret:str=Form(""),whatsapp_provider:str=Form("mock"),whatsapp_token:str=Form(""),whatsapp_phone_number_id:str=Form(""),credit_price_inr:float=Form(2.50),a=Depends(super_admin),db:Session=Depends(get_db)):
     if credit_price_inr<=0:raise HTTPException(400,"Credit price must be greater than zero")
-    for k,v in [("razorpay_mode",razorpay_mode.lower()), ("razorpay_key_id",razorpay_key_id.strip()), ("razorpay_key_secret",razorpay_key_secret.strip()), ("razorpay_webhook_secret",razorpay_webhook_secret.strip()), ("whatsapp_provider",whatsapp_provider.lower()), ("whatsapp_token",whatsapp_token.strip()), ("whatsapp_phone_number_id",whatsapp_phone_number_id.strip()), ("credit_price_inr",f"{credit_price_inr:.2f}")]:
-        save_setting(db,k,v,k in {"razorpay_key_secret","razorpay_webhook_secret","whatsapp_token"})
+    values=[("razorpay_mode",razorpay_mode.lower(),False),("razorpay_key_id",razorpay_key_id.strip(),False),("razorpay_key_secret",razorpay_key_secret.strip(),True),("razorpay_webhook_secret",razorpay_webhook_secret.strip(),True),("whatsapp_provider",whatsapp_provider.lower(),False),("whatsapp_token",whatsapp_token.strip(),True),("whatsapp_phone_number_id",whatsapp_phone_number_id.strip(),False),("credit_price_inr",f"{credit_price_inr:.2f}",False)]
+    for k,v,secret in values:
+        if secret and not v: continue
+        save_setting(db,k,v,secret)
     db.commit();return {"ok":True}
 
 @router.put("/api/superadmin/password")
