@@ -131,3 +131,17 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}
 .upload-ready{display:grid;place-items:center;width:18px;height:18px;flex:0 0 18px;border-radius:50%;background:#eceafd;color:#6757d9;font-size:11px;font-weight:700}
 #uploadStartBtn:disabled{opacity:.65;cursor:wait}
 @keyframes aarogyam-spin{to{transform:rotate(360deg)}}
+
+.pending-list{display:flex;flex-direction:column;gap:10px}
+.pending-item{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;border:1px solid var(--line,#e5e7ef);border-radius:16px;background:#fff}
+.pending-main{display:flex;align-items:center;gap:14px;min-width:0}
+.pending-id{display:grid;place-items:center;width:42px;height:42px;flex:0 0 42px;border-radius:12px;background:#f0eeff;color:#6557d8;font-weight:800;font-size:13px}
+.pending-main b{display:block;overflow-wrap:anywhere}
+.pending-main p{margin:4px 0 0;font-size:12px}
+.pending-action{flex:0 0 auto}
+.empty-state{text-align:center;padding:48px 20px}
+@media(max-width:600px){
+  .pending-item{align-items:flex-start;flex-direction:column}
+  .pending-action{width:100%}
+  .pending-action button{width:100%}
+}
