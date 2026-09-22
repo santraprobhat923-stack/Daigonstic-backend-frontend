@@ -76,7 +76,7 @@ def adjust_credits(centre_id:int,credits:int=Form(...),a=Depends(super_admin),db
 
 @router.get("/api/superadmin/settings")
 def settings(a=Depends(super_admin),db:Session=Depends(get_db)):
-    return {"razorpay_mode":setting(db,"razorpay_mode","test"),"razorpay_key_id":setting(db,"razorpay_key_id",""),"razorpay_configured":bool(setting(db,"razorpay_key_id","") and setting(db,"razorpay_key_secret","")),"razorpay_webhook_configured":bool(setting(db,"razorpay_webhook_secret","")),"whatsapp_provider":setting(db,"whatsapp_provider","mock"),"whatsapp_configured":bool(setting(db,"whatsapp_token","") and setting(db,"whatsapp_phone_number_id","")),"credit_price_inr":setting(db,"credit_price_inr","2.50")}
+    return {"razorpay_mode":setting(db,"razorpay_mode","test"),"razorpay_key_id":setting(db,"razorpay_key_id",""),"razorpay_configured":bool(setting(db,"razorpay_key_id","") and setting(db,"razorpay_key_secret","")),"razorpay_webhook_configured":bool(setting(db,"razorpay_webhook_secret","")),"whatsapp_provider":setting(db,"whatsapp_provider","mock"),"whatsapp_configured":bool(setting(db,"whatsapp_token","") and setting(db,"whatsapp_phone_number_id","")),"whatsapp_phone_number_id":setting(db,"whatsapp_phone_number_id",""),"credit_price_inr":setting(db,"credit_price_inr","2.50")}
 
 @router.put("/api/superadmin/settings")
 def save_settings(razorpay_mode:str=Form("test"),razorpay_key_id:str=Form(""),razorpay_key_secret:str=Form(""),razorpay_webhook_secret:str=Form(""),whatsapp_provider:str=Form("mock"),whatsapp_token:str=Form(""),whatsapp_phone_number_id:str=Form(""),credit_price_inr:float=Form(2.50),a=Depends(super_admin),db:Session=Depends(get_db)):
