@@ -9,3 +9,4 @@ PyPDF2
 requests
 razorpay
 python-dotenv
+cryptography
