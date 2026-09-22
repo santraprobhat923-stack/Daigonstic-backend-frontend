@@ -287,3 +287,44 @@ The upload path has been changed so the technician no longer waits for Tesseract
 A new **Pending Verification** workspace entry lets staff upload multiple slips first and review them later from one queue. Processing jobs show live polling status; completed OCR jobs show a Review action that opens the existing editable technician verification screen. This does not change the authoritative workflow: OCR remains draft data and technician approval is still required before PDF generation.
 
 The upload screen now returns to the queue after the report job is created instead of waiting for OCR. This is intended to make high-volume Android intake substantially more responsive while keeping the existing report/PDF/payment/WhatsApp workflow intact.
+
+## WhatsApp automation hardening — 22 Sep 2026
+
+The WhatsApp delivery path now follows the planned centre workflow end-to-end:
+
+- **WhatsApp OFF:** no patient message is queued and centre PDF download remains available.
+- **WhatsApp ON + payment Due:** a `PAYMENT_REQUEST` job is queued automatically with the patient amount and centre UPI ID.
+- **Payment Paid / verified:** the report becomes `RELEASED` and a `FINAL_REPORT` job is queued automatically.
+- The final Meta message is designed to deliver the generated PDF as a WhatsApp **document**, using the secure tokenized patient-report URL rather than exposing a local storage path.
+- WhatsApp jobs are idempotent per report/message kind, so the same payment or final-report event does not create duplicate jobs.
+- The worker now uses `PENDING → PROCESSING → SENT` and `RETRY → DEAD_LETTER` states with bounded retry delays and stores the last delivery error.
+- Centre notifications are created for successful WhatsApp sends and permanently failed/dead-letter jobs.
+- Existing reports and SQLite databases are migrated automatically with the new WhatsApp retry columns; no intentional database reset is required.
+
+### Meta WhatsApp configuration
+
+Local development continues to use:
+
+`WHATSAPP_PROVIDER=mock`
+
+For real Meta Cloud API delivery, configure:
+
+`WHATSAPP_PROVIDER=meta`  
+`PUBLIC_BASE_URL=https://your-public-https-domain`  
+`WHATSAPP_TOKEN=...`  
+`WHATSAPP_PHONE_NUMBER_ID=...`  
+`WHATSAPP_PAYMENT_TEMPLATE=aarogyam_payment`  
+`WHATSAPP_REPORT_TEMPLATE=aarogyam_report`  
+`WHATSAPP_TEMPLATE_LANG=en_US`
+
+The Meta templates must be created/approved in the WhatsApp Business account with parameters matching Aarogyam:
+- payment template: amount + centre UPI in the body;
+- report template: document header + patient name in the body.
+
+The report template's document is fetched by Meta from the public HTTPS tokenized report URL. Therefore real delivery requires a publicly reachable HTTPS deployment and a valid Meta access token/phone-number ID. Localhost/Android LAN URLs are not valid for the real patient document delivery path.
+
+The centre UI exposes the active provider and template names in **Centre Settings**, but secrets are never returned to the browser.
+
+### Delivery rule
+
+Payment is a **patient-release/delivery state**, not a PDF-generation prerequisite. Aarogyam continues to generate and make the centre PDF downloadable immediately after technician verification. WhatsApp automation operates after that point.
