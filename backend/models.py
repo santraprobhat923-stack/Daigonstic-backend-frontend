@@ -72,3 +72,19 @@ class WAJob(Base):
     next_attempt_at=Column(DateTime,nullable=True)
     created_at=Column(DateTime,default=datetime.utcnow)
     __table_args__=(UniqueConstraint("report_id","kind",name="uq_wa_report_kind"),)
+
+class SuperAdmin(Base):
+    __tablename__="super_admins"
+    id=Column(Integer,primary_key=True)
+    name=Column(String,nullable=False)
+    email=Column(String,unique=True,index=True,nullable=False)
+    password_hash=Column(String,nullable=False)
+    enabled=Column(Boolean,default=True,nullable=False)
+    last_login=Column(DateTime,nullable=True)
+
+class SystemSetting(Base):
+    __tablename__="system_settings"
+    id=Column(Integer,primary_key=True)
+    key=Column(String,unique=True,index=True,nullable=False)
+    value=Column(Text,default="",nullable=False)
+    is_secret=Column(Boolean,default=False,nullable=False)
