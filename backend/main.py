@@ -64,19 +64,31 @@ def login(email:str=Form(...),password:str=Form(...),db:Session=Depends(get_db))
 def me(c=Depends(current)): return {"centre_id":c.id,"name":c.name,"email":c.email,"credits":c.credits}
 @app.post("/api/reports/upload")
 def upload(files:list[UploadFile]=File(...),c=Depends(current),db:Session=Depends(get_db)):
-    paths=[]; hashes=[]; merged={"patient":{},"tests":[]}; texts=[]
+    paths=[]; hashes=[]; merged={"patient":{},"tests":[]}; texts=[]; duplicates=0; ocr_errors=[]
+    existing_hashes=set()
+    for raw in db.query(Report.image_hashes).filter_by(centre_id=c.id).all():
+        try: existing_hashes.update(json.loads(raw[0] or "[]"))
+        except Exception: pass
     for f in files:
         data=awaitable_read(f)
+        if not data: continue
         h=sha(data)
-        if h in hashes: continue
+        if h in hashes or h in existing_hashes:
+            duplicates+=1
+            continue
         p=STORAGE_DIR/f"centre_{c.id}"/"images"/(secrets.token_hex(8)+"_"+Path(f.filename or "image").name)
         p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(data); paths.append(str(p)); hashes.append(h)
-        t,d=extract(str(p)); texts.append(t)
-        for k,v in d["patient"].items(): merged["patient"][k]=merged["patient"].get(k) or v
-        merged["tests"]+=d["tests"]
-    if not paths: raise HTTPException(400,"No image received")
+        try:
+            t,d=extract(str(p)); texts.append(t)
+            for k,v in d["patient"].items(): merged["patient"][k]=merged["patient"].get(k) or v
+            merged["tests"]+=d["tests"]
+        except Exception as e:
+            ocr_errors.append(f"{Path(f.filename or 'image').name}: OCR could not be completed ({e})")
+    if not paths:
+        if duplicates: raise HTTPException(409,"This image was already uploaded. No new report was created.")
+        raise HTTPException(400,"No image received")
     r=Report(centre_id=c.id,token=secrets.token_urlsafe(32),verified_data=json.dumps(merged),ocr_text="\n".join(texts),image_paths=json.dumps(paths),image_hashes=json.dumps(hashes)); db.add(r); db.commit(); db.refresh(r)
-    return {"report":report_dict(r),"extracted":merged}
+    return {"report":report_dict(r),"extracted":merged,"uploaded_count":len(paths),"duplicate_count":duplicates,"ocr_error":"; ".join(ocr_errors) if ocr_errors else ""}
 def awaitable_read(f):
     return f.file.read()
 @app.post("/api/reports/{rid}/verify")
