@@ -40,6 +40,15 @@ async function pending(){
   app.innerHTML=shell('<div class="wrap"><div class="page-head"><div><div class="eyebrow">Technician queue</div><h1>Pending verification</h1><p>Upload many slips first, then review them here as OCR finishes.</p></div><div class="actions"><button class="primary" onclick="capture()">＋ Upload more</button></div></div><div class="card"><div id="pendingList">'+pendingRows(jobs)+'</div></div></div>');
   if(jobs.some(x=>String(x.status||"").toUpperCase()==="OCR_PROCESSING"))setTimeout(pending,1600);
 }
+async function verifyJob(id){
+  try{
+    const r=await api("/api/reports");
+    const x=r.find(v=>v.id===id);
+    if(!x)return alert("Report no longer exists");
+    if(String(x.status||"").toUpperCase()==="OCR_PROCESSING")return pending();
+    verify(id,x.verified_data||{patient:{},tests:[]});
+  }catch(e){alert(e.message)}
+}
 function pendingRows(r){
   if(!r.length)return '<div class="empty-state"><h3>Queue is clear</h3><p class="muted">New uploaded slips will appear here when they are ready for technician verification.</p><button class="primary" onclick="capture()">＋ Upload reports</button></div>';
   return '<div class="pending-list">'+r.map(x=>{
