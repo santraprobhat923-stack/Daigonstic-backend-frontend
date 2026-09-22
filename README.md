@@ -267,3 +267,7 @@ The mobile/desktop sidebar navigation template had a missing JavaScript string t
 
 ## Mobile viewport containment fix — 22 Sep 2026
 The Android/mobile workspace had horizontal page overflow, allowing the entire application to be dragged sideways into blank space. The frontend now explicitly contains horizontal overflow at the document/app level, constrains workspace/grid/card/chart widths, and collapses the technician verification five-column patient grid to one column on narrow screens. This is a presentation-only responsive fix; backend workflow and stored data are unchanged.
+
+
+## Dark sidebar theme — 22 Sep 2026
+The centre-facing navigation rail and mobile slide-in drawer now use a dark premium theme while the main workspace remains light. Navigation uses muted light text, a violet active state, subtle hover surfaces, and a dark mobile menu button. This is presentation-only; APIs, authentication, OCR, PDF, payment and WhatsApp workflow are unchanged.
