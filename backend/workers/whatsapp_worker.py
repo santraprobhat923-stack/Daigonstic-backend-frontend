@@ -138,4 +138,4 @@ def run():
             db.close()
 
 def start_worker():
-    threading.Thread(target=run,daemon=True,name="aarogyam-whatsapp",daemon=True).start()
+    threading.Thread(target=run,daemon=True,name="aarogyam-whatsapp").start()
