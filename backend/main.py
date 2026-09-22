@@ -23,7 +23,10 @@ def migrate_legacy_sqlite():
             if "upi_id" not in cols: conn.execute(text("ALTER TABLE centres ADD COLUMN upi_id VARCHAR DEFAULT ''"))
             if "credits" not in cols: conn.execute(text("ALTER TABLE centres ADD COLUMN credits INTEGER DEFAULT 10"))
             if "template_path" not in cols: conn.execute(text("ALTER TABLE centres ADD COLUMN template_path VARCHAR DEFAULT ''"))
-            if "password" in cols:\n                rows=conn.execute(text("SELECT id,password FROM centres WHERE (password_hash IS NULL OR password_hash='') AND password IS NOT NULL")).fetchall()\n                for row in rows: conn.execute(text("UPDATE centres SET password_hash=:h WHERE id=:id"),{"h":hash_password(row[1]),"id":row[0]})
+            if "password" in cols:
+                rows=conn.execute(text("SELECT id,password FROM centres WHERE (password_hash IS NULL OR password_hash='') AND password IS NOT NULL")).fetchall()
+                for row in rows:
+                    conn.execute(text("UPDATE centres SET password_hash=:h WHERE id=:id"),{"h":hash_password(row[1]),"id":row[0]})
         if "reports" in tables:
             cols=[x[1] for x in conn.execute(text("PRAGMA table_info(reports)"))]
             if "image_hashes" not in cols: conn.execute(text("ALTER TABLE reports ADD COLUMN image_hashes TEXT DEFAULT '[]'"))
