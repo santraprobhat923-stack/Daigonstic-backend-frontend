@@ -1,11 +1,11 @@
 import json,secrets
 from pathlib import Path
-from fastapi import FastAPI,UploadFile,File,Form,HTTPException,Request,Depends
+from fastapi import FastAPI,UploadFile,File,Form,HTTPException,Request,Depends,BackgroundTasks
 from fastapi.responses import FileResponse,HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from .database import Base,engine,get_db
+from .database import Base,engine,get_db,SessionLocal
 from .models import Centre,Report,Notification
 from .auth import hash_password,check_password,token_for,centre_id
 from .config import STORAGE_DIR,CREDIT_PRICE_INR
@@ -62,9 +62,44 @@ def login(email:str=Form(...),password:str=Form(...),db:Session=Depends(get_db))
     return {"access_token":token_for(c.id),"centre_id":c.id,"name":c.name,"credits":c.credits}
 @app.get("/api/me")
 def me(c=Depends(current)): return {"centre_id":c.id,"name":c.name,"email":c.email,"credits":c.credits}
+def process_ocr(report_id, centre_id, paths):
+    db=SessionLocal()
+    try:
+        r=db.get(Report,report_id)
+        if not r or r.centre_id!=centre_id: return
+        merged={"patient":{},"tests":[]}; texts=[]; errors=[]
+        for raw_path in paths:
+            try:
+                t,d=extract(raw_path); texts.append(t)
+                for k,v in d["patient"].items():
+                    if v and not merged["patient"].get(k): merged["patient"][k]=v
+                merged["tests"]+=d["tests"]
+            except Exception as e:
+                errors.append(f"OCR failed for {Path(raw_path).name}: {e}")
+        r.verified_data=json.dumps(merged)
+        r.ocr_text="\n".join(texts + errors)
+        p=merged.get("patient",{})
+        r.patient_name=p.get("name",""); r.patient_age=p.get("age",""); r.patient_sex=p.get("sex","")
+        r.patient_phone=p.get("phone",""); r.patient_code=p.get("code","")
+        r.status="OCR_REVIEW"
+        notify(db,centre_id,report_id,"OCR_READY",f"Report #{report_id} is ready for technician verification.")
+        db.commit()
+    except Exception:
+        db.rollback()
+        try:
+            r=db.get(Report,report_id)
+            if r:
+                r.status="OCR_REVIEW"
+                r.ocr_text=(r.ocr_text or "") + "\nOCR processing encountered an error. Please review the image."
+                db.commit()
+        except Exception:
+            db.rollback()
+    finally:
+        db.close()
+
 @app.post("/api/reports/upload")
-def upload(files:list[UploadFile]=File(...),c=Depends(current),db:Session=Depends(get_db)):
-    paths=[]; hashes=[]; merged={"patient":{},"tests":[]}; texts=[]; duplicates=0; ocr_errors=[]
+def upload(background_tasks:BackgroundTasks,files:list[UploadFile]=File(...),c=Depends(current),db:Session=Depends(get_db)):
+    paths=[]; hashes=[]; duplicates=0
     existing_hashes=set()
     for raw in db.query(Report.image_hashes).filter_by(centre_id=c.id).all():
         try: existing_hashes.update(json.loads(raw[0] or "[]"))
@@ -78,17 +113,16 @@ def upload(files:list[UploadFile]=File(...),c=Depends(current),db:Session=Depend
             continue
         p=STORAGE_DIR/f"centre_{c.id}"/"images"/(secrets.token_hex(8)+"_"+Path(f.filename or "image").name)
         p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(data); paths.append(str(p)); hashes.append(h)
-        try:
-            t,d=extract(str(p)); texts.append(t)
-            for k,v in d["patient"].items(): merged["patient"][k]=merged["patient"].get(k) or v
-            merged["tests"]+=d["tests"]
-        except Exception as e:
-            ocr_errors.append(f"{Path(f.filename or 'image').name}: OCR could not be completed ({e})")
     if not paths:
         if duplicates: raise HTTPException(409,"This image was already uploaded. No new report was created.")
         raise HTTPException(400,"No image received")
-    r=Report(centre_id=c.id,token=secrets.token_urlsafe(32),verified_data=json.dumps(merged),ocr_text="\n".join(texts),image_paths=json.dumps(paths),image_hashes=json.dumps(hashes)); db.add(r); db.commit(); db.refresh(r)
-    return {"report":report_dict(r),"extracted":merged,"uploaded_count":len(paths),"duplicate_count":duplicates,"ocr_error":"; ".join(ocr_errors) if ocr_errors else ""}
+    r=Report(centre_id=c.id,token=secrets.token_urlsafe(32),verified_data=json.dumps({"patient":{},"tests":[]}),
+             ocr_text="",image_paths=json.dumps(paths),image_hashes=json.dumps(hashes),status="OCR_PROCESSING")
+    db.add(r); db.commit(); db.refresh(r)
+    background_tasks.add_task(process_ocr,r.id,c.id,paths)
+    return {"report":report_dict(r),"extracted":{"patient":{},"tests":[]},
+            "uploaded_count":len(paths),"duplicate_count":duplicates,"ocr_status":"PROCESSING"}
+
 def awaitable_read(f):
     return f.file.read()
 @app.post("/api/reports/{rid}/verify")
