@@ -10,9 +10,10 @@ except Exception: pytesseract=None
 from .config import STORAGE_DIR
 from .models import Notification,WAJob
 
-# Common laboratory units. Kept broad so the parser works across CBC, thyroid,
-# chemistry and routine diagnostic slips.
-UNIT_RE=r"(?:mg/dL|g/dL|gm/dL|ng/dL|ng/mL|pg/mL|µIU/mL|uIU/mL|mIU/L|IU/L|IU/mL|U/L|mmol/L|µmol/L|umol/L|mEq/L|mmHg|%|fL|pg|sec|/HPF|/hpf|cells/HPF|million/µL|million/uL|10\^\d+/µL|10\^\d+/uL|[A-Za-zµ]+/[A-Za-zµ]+)"
+# OCR is intentionally layout-tolerant: diagnostic slips vary widely between
+# analyzers and centres. We run several Tesseract passes and merge useful
+# readings before parsing. OCR remains draft data until technician review.
+UNIT_RE=r"(?:mg/dL|g/dL|gm/dL|ng/dL|ng/mL|pg/mL|µIU/mL|uIU/mL|mIU/L|IU/L|IU/mL|U/L|mmol/L|µmol/L|umol/L|mEq/L|mmHg|%|fL|pg|sec|/HPF|/hpf|cells/HPF|million/µL|million/uL|10\^\d+/µL|10\^\d+/uL|10\d+/µL|10\d+/uL|[A-Za-zµ]+/[A-Za-zµ]+)"
 NUMBER_RE=r"[<>]?\d+(?:[.,]\d+)?"
 
 def _clean_line(line):
@@ -20,68 +21,93 @@ def _clean_line(line):
 
 def _looks_like_test_name(name):
     name=_clean_line(name)
-    if len(name)<2 or len(name)>60: return False
+    if len(name)<2 or len(name)>80 or not re.search(r"[A-Za-z]",name): return False
     low=name.lower()
-    blocked=("patient","name","age","sex","gender","mobile","phone","whatsapp","address",
-             "sample","specimen","barcode","report","date","time","reference","range",
-             "normal","result","unit","value","doctor","laboratory","diagnostic")
+    blocked=("patient","patient id","patient code","name","age","sex","gender","mobile","phone",
+             "whatsapp","address","sample","specimen","barcode","report","date","time","reference",
+             "range","normal","result","unit","value","doctor","laboratory","diagnostic centre",
+             "diagnostic center","collection","received","registration")
     return not any(re.search(r"\b"+re.escape(x)+r"\b",low) for x in blocked)
 
-def _parse_tests(text):
-    tests=[]
-    seen=set()
-    for raw in text.splitlines():
-        line=_clean_line(raw)
-        if not line: continue
+def _ocr_variants(path):
+    if not pytesseract: return []
+    img=Image.open(path).convert("L")
+    w,h=img.size
+    if max(w,h)<2400:
+        img=img.resize((w*2,h*2),Image.Resampling.LANCZOS)
+    from PIL import ImageOps,ImageFilter
+    base=ImageOps.autocontrast(img)
+    variants=[img,base,base.filter(ImageFilter.SHARPEN)]
+    readings=[]
+    for v in variants:
+        for psm in (6,4,11):
+            try: t=pytesseract.image_to_string(v,config=f"--psm {psm}")
+            except Exception: t=""
+            if t and t.strip(): readings.append(t)
+    return readings
 
-        # First handle normal "TEST : VALUE UNIT" / "TEST VALUE UNIT" rows.
-        patterns=[
-            rf"^(.{{2,50}}?)\s*[:=]\s*({NUMBER_RE}|positive|negative|normal|reactive|non-reactive)\s*([A-Za-zµ%/][A-Za-z0-9µ%/^.\-]*)?$",
-            rf"^(.{{2,50}}?)\s+({NUMBER_RE})\s+({UNIT_RE})$",
-            rf"^(.{{2,50}}?)\s+({NUMBER_RE})\s+([A-Za-zµ%/][A-Za-z0-9µ%/^.\-]*)\s*$",
-        ]
-        match=None
-        for pat in patterns:
-            m=re.match(pat,line,re.I)
+def _first_field(readings,patterns):
+    candidates=[]
+    for text in readings:
+        for raw in text.splitlines():
+            line=_clean_line(raw)
+            if not line: continue
+            for p in patterns:
+                m=re.search(p,line,re.I)
+                if m:
+                    value=_clean_line(m.group(1))
+                    if value: candidates.append(value)
+    if not candidates: return ""
+    labels=r"\b(?:age|sex|gender|mobile|phone|whatsapp|patient\s*(?:id|code))\b"
+    clean=[x for x in candidates if not re.search(labels,x,re.I)]
+    return min(clean or candidates,key=len)
+
+def _parse_tests(readings):
+    tests=[]; seen=set()
+    for text in readings:
+        for raw in text.splitlines():
+            line=_clean_line(raw)
+            if not line: continue
+            line=_clean_line(re.sub(r"[|]+"," ",line))
+            patterns=[
+                rf"^(.{{2,70}}?)\s*[:=]\s*({NUMBER_RE}|positive|negative|normal|reactive|non-reactive)\s*({UNIT_RE})?\b",
+                rf"^(.{{2,70}}?)\s+({NUMBER_RE})\s+({UNIT_RE})\b",
+            ]
+            m=None
+            for pat in patterns:
+                m=re.match(pat,line,re.I)
+                if m: break
             if m:
-                match=m; break
-        if match:
-            name=_clean_line(match.group(1))
-            value=match.group(2).replace(",",".")
-            unit=_clean_line(match.group(3) or "")
-            if _looks_like_test_name(name):
-                key=(name.lower(),value.lower(),unit.lower())
-                if key not in seen:
-                    tests.append({"name":name,"value":value,"unit":unit}); seen.add(key)
-                continue
-
-        # Table-like OCR often loses column separators. Find the first numeric
-        # result and treat text before it as the test name, text after it as unit.
-        m=re.search(rf"\b({NUMBER_RE})\b",line)
-        if m:
-            name=_clean_line(line[:m.start()])
-            value=m.group(1).replace(",",".")
-            tail=_clean_line(line[m.end():])
-            tail=re.sub(r"^[|:=-]+","",tail).strip()
-            unit_match=re.match(rf"^({UNIT_RE})\b",tail,re.I)
-            unit=unit_match.group(1) if unit_match else (tail.split()[0] if tail and len(tail.split()[0])<=18 else "")
-            if _looks_like_test_name(name) and len(name.split())<=10:
-                key=(name.lower(),value.lower(),unit.lower())
-                if key not in seen:
-                    tests.append({"name":name,"value":value,"unit":unit}); seen.add(key)
+                name=_clean_line(m.group(1)); value=m.group(2).replace(",","." ); unit=_clean_line(m.group(3) or "")
+                if _looks_like_test_name(name):
+                    key=(re.sub(r"[^a-z0-9]+","",name.lower()),value.lower(),unit.lower())
+                    if key not in seen:
+                        tests.append({"name":name,"value":value,"unit":unit}); seen.add(key)
+                    continue
+            m=re.search(rf"^(.{{2,70}}?)\s+({NUMBER_RE})(?:\s+(.{{1,30}}))?$",line,re.I)
+            if m:
+                name=_clean_line(m.group(1)); value=m.group(2).replace(",","." ); tail=_clean_line(m.group(3) or "")
+                um=re.match(rf"^({UNIT_RE})\b",tail,re.I)
+                unit=um.group(1) if um else ""
+                if _looks_like_test_name(name) and len(name.split())<=12:
+                    key=(re.sub(r"[^a-z0-9]+","",name.lower()),value.lower(),unit.lower())
+                    if key not in seen:
+                        tests.append({"name":name,"value":value,"unit":unit}); seen.add(key)
     return tests
 
 def extract(path):
-    text=pytesseract.image_to_string(Image.open(path),config="--psm 6") if pytesseract else ""
-    def f(p):
-        m=re.search(p,text,re.I)
-        return m.group(1).strip() if m else ""
-    patient={"name":f(r"(?:patient|name)\s*[:#-]?\s*([A-Za-z][A-Za-z .'-]{1,80})"),
-             "age":f(r"age\s*[:#-]?\s*(\d{1,3})"),
-             "sex":f(r"(?:sex|gender)\s*[:#-]?\s*(male|female|m|f)"),
-             "phone":f(r"(?:phone|mobile|whatsapp)\s*[:#-]?\s*(\+?\d[\d -]{8,})"),
-             "code":f(r"(?:patient\s*(?:id|code)|id)\s*[:#-]?\s*([A-Za-z0-9_-]{3,})")}
-    return text,{"patient":patient,"tests":_parse_tests(text)}
+    readings=_ocr_variants(path)
+    combined="\n".join(readings)
+    patient={
+        "name":_first_field(readings,[r"\bpatient\s*name\s*[:#-]\s*(.+?)$",r"\bname\s*[:#-]\s*(.+?)$"]),
+        "age":_first_field(readings,[r"\bage\s*[:#-]?\s*(\d{1,3})\b"]),
+        "sex":_first_field(readings,[r"\b(?:sex|gender)\s*[:#-]?\s*(male|female|m|f)\b"]),
+        "phone":_first_field(readings,[r"\b(?:phone|mobile|whatsapp)\s*[:#-]?\s*(\+?\d[\d -]{8,})"]),
+        "code":_first_field(readings,[r"\bpatient\s*(?:id|code)\s*[:#-]?\s*([A-Za-z0-9_-]{3,})\b"]),
+    }
+    if re.search(r"\b(?:age|sex|gender|mobile|phone|patient\s*(?:id|code))\b",patient["name"],re.I):
+        patient["name"]=""
+    return combined,{"patient":patient,"tests":_parse_tests(readings)}
 
 def sha(data): return hashlib.sha256(data).hexdigest()
 def notify(db,cid,rid,kind,msg): db.add(Notification(centre_id=cid,report_id=rid,kind=kind,message=msg))
