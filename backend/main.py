@@ -8,7 +8,7 @@ from sqlalchemy import text
 from .database import Base,engine,get_db,SessionLocal
 from .models import Centre,Report,Notification
 from .auth import hash_password,check_password,token_for,centre_id
-from .config import STORAGE_DIR,CREDIT_PRICE_INR
+from .config import STORAGE_DIR,CREDIT_PRICE_INR,WHATSAPP_PROVIDER,WHATSAPP_PAYMENT_TEMPLATE,WHATSAPP_REPORT_TEMPLATE
 from .services import extract,sha,notify,queue_wa,make_pdf,report_dict
 from .workers.whatsapp_worker import start_worker
 Base.metadata.create_all(engine)
@@ -169,7 +169,7 @@ def verify_payment(rid:int,c=Depends(current),db:Session=Depends(get_db)):
     if not r or r.centre_id!=c.id: raise HTTPException(404,"Report not found")
     r.payment="PAID"; r.status="RELEASED"; notify(db,c.id,r.id,"PAYMENT_RECEIVED",f"Payment verified for report #{r.id}. Report released."); queue_wa(db,c,r,"FINAL_REPORT",{"phone":r.patient_phone,"url":f"/patient/report/{r.token}"}); db.commit(); return report_dict(r)
 @app.get("/api/settings")
-def settings_get(c=Depends(current)): return {"whatsapp_enabled":c.whatsapp_enabled,"upi_id":c.upi_id,"credits":c.credits,"credit_price_inr":CREDIT_PRICE_INR}
+def settings_get(c=Depends(current)): return {"whatsapp_enabled":c.whatsapp_enabled,"upi_id":c.upi_id,"credits":c.credits,"credit_price_inr":CREDIT_PRICE_INR,"whatsapp_provider":WHATSAPP_PROVIDER,"payment_template":WHATSAPP_PAYMENT_TEMPLATE,"report_template":WHATSAPP_REPORT_TEMPLATE}
 @app.put("/api/settings")
 def settings_save(whatsapp_enabled:bool=Form(...),upi_id:str=Form(""),c=Depends(current),db:Session=Depends(get_db)):
     c.whatsapp_enabled=whatsapp_enabled; c.upi_id=upi_id.strip(); db.commit(); return {"ok":True}
