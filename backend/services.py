@@ -41,4 +41,4 @@ def make_pdf(centre,report,data,out):
         with open(out,"wb") as f:wri.write(f)
     else: out.write_bytes(body.read())
 def report_dict(r):
-    return {"id":r.id,"patient_name":r.patient_name,"patient_age":r.patient_age,"patient_sex":r.patient_sex,"patient_phone":r.patient_phone,"patient_code":r.patient_code,"status":r.status,"payment":r.payment,"charge":r.charge,"verified_data":json.loads(r.verified_data or "{}"),"created_at":r.created_at.isoformat()}
+    return {"id":r.id,"patient_name":r.patient_name,"patient_age":r.patient_age,"patient_sex":r.patient_sex,"patient_phone":r.patient_phone,"patient_code":r.patient_code,"status":r.status,"payment":r.payment,"charge":r.charge,"pdf_path":r.pdf_path,"verified_data":json.loads(r.verified_data or "{}"),"created_at":r.created_at.isoformat()}
