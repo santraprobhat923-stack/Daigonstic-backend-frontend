@@ -3,7 +3,7 @@ from fastapi import APIRouter,Depends,Form,HTTPException,Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from .database import get_db
-from .models import SuperAdmin,SystemSetting,Centre,Report,CreditTransaction
+from .models import SuperAdmin,SystemSetting,Centre,Report,CreditTransaction,CreditOrder,WAJob,Notification
 from .auth import hash_password,check_password
 from .config import SECRET_KEY
 
@@ -64,11 +64,65 @@ def me(a=Depends(super_admin)):return {"name":a.name,"email":a.email}
 
 @router.get("/api/superadmin/dashboard")
 def dashboard(a=Depends(super_admin),db:Session=Depends(get_db)):
-    return {"centres":db.query(func.count(Centre.id)).scalar() or 0,"reports":db.query(func.count(Report.id)).scalar() or 0,"credits_sold":sum((x.credits or 0) for x in db.query(CreditTransaction).filter(CreditTransaction.type=="RECHARGE").all()),"revenue_inr":round(sum((x.amount_inr or 0) for x in db.query(CreditTransaction).filter(CreditTransaction.type=="RECHARGE").all()),2),"credit_price_inr":float(setting(db,"credit_price_inr","2.50"))}
+    centres=db.query(Centre).all()
+    tx=db.query(CreditTransaction).filter(CreditTransaction.type=="RECHARGE").all()
+    return {"centres":len(centres),"active_centres":sum(1 for c in centres if c.enabled),"suspended_centres":sum(1 for c in centres if not c.enabled),
+            "reports":db.query(func.count(Report.id)).scalar() or 0,
+            "pending_verifications":db.query(func.count(Report.id)).filter(Report.status=="OCR_REVIEW").scalar() or 0,
+            "payment_pending":db.query(func.count(Report.id)).filter(Report.status=="PAYMENT_PENDING").scalar() or 0,
+            "credits_sold":sum((x.credits or 0) for x in tx),"revenue_inr":round(sum((x.amount_inr or 0) for x in tx),2),
+            "wa_pending":db.query(func.count(WAJob.id)).filter(WAJob.status.in_(["PENDING","PROCESSING","RETRY"])).scalar() or 0,
+            "wa_failed":db.query(func.count(WAJob.id)).filter(WAJob.status=="DEAD_LETTER").scalar() or 0,
+            "credit_price_inr":float(setting(db,"credit_price_inr","2.50"))}
 
 @router.get("/api/superadmin/centres")
 def centres(a=Depends(super_admin),db:Session=Depends(get_db)):
-    return [{"id":c.id,"name":c.name,"email":c.email,"credits":c.credits,"whatsapp_enabled":c.whatsapp_enabled,"upi_id":c.upi_id} for c in db.query(Centre).order_by(Centre.id.desc()).all()]
+    rows=[]
+    for c in db.query(Centre).order_by(Centre.id.desc()).all():
+        reports=db.query(func.count(Report.id)).filter(Report.centre_id==c.id).scalar() or 0
+        used=-(db.query(func.coalesce(func.sum(CreditTransaction.credits),0)).filter(CreditTransaction.centre_id==c.id,CreditTransaction.type=="REPORT_USAGE").scalar() or 0)
+        last=db.query(func.max(Report.created_at)).filter(Report.centre_id==c.id).scalar()
+        rows.append({"id":c.id,"name":c.name,"email":c.email,"enabled":c.enabled,"credits":c.credits,"reports":reports,"credits_used":used,
+                     "last_activity":last.isoformat() if last else None,"whatsapp_enabled":c.whatsapp_enabled,"upi_id":c.upi_id,"template_configured":bool(c.template_path)})
+    return rows
+
+@router.get("/api/superadmin/centres/{centre_id}")
+def centre_detail(centre_id:int,a=Depends(super_admin),db:Session=Depends(get_db)):
+    c=db.get(Centre,centre_id)
+    if not c: raise HTTPException(404,"Centre not found")
+    reports=db.query(Report).filter_by(centre_id=c.id).order_by(Report.id.desc()).limit(50).all()
+    tx=db.query(CreditTransaction).filter_by(centre_id=c.id).order_by(CreditTransaction.id.desc()).limit(50).all()
+    return {"centre":{"id":c.id,"name":c.name,"email":c.email,"enabled":c.enabled,"credits":c.credits,"whatsapp_enabled":c.whatsapp_enabled,
+             "upi_id":c.upi_id,"template_configured":bool(c.template_path),"created_at":c.created_at.isoformat() if c.created_at else None},
+            "reports":[{"id":r.id,"patient_name":r.patient_name,"status":r.status,"payment":r.payment,"created_at":r.created_at.isoformat() if r.created_at else None} for r in reports],
+            "transactions":[{"id":x.id,"type":x.type,"credits":x.credits,"amount_inr":x.amount_inr,"reference":x.reference,"created_at":x.created_at.isoformat() if x.created_at else None} for x in tx]}
+
+@router.put("/api/superadmin/centres/{centre_id}/status")
+def centre_status(centre_id:int,enabled:bool=Form(...),a=Depends(super_admin),db:Session=Depends(get_db)):
+    c=db.get(Centre,centre_id)
+    if not c: raise HTTPException(404,"Centre not found")
+    c.enabled=enabled; db.commit()
+    return {"ok":True,"centre_id":c.id,"enabled":c.enabled}
+
+@router.get("/api/superadmin/monitoring")
+def monitoring(a=Depends(super_admin),db:Session=Depends(get_db)):
+    return {"ocr_review":[{"id":r.id,"centre_id":r.centre_id,"patient":r.patient_name,"created_at":r.created_at.isoformat() if r.created_at else None} for r in db.query(Report).filter(Report.status=="OCR_REVIEW").order_by(Report.id.desc()).limit(50)],
+            "payment_pending":[{"id":r.id,"centre_id":r.centre_id,"patient":r.patient_name,"payment":r.payment,"created_at":r.created_at.isoformat() if r.created_at else None} for r in db.query(Report).filter(Report.status=="PAYMENT_PENDING").order_by(Report.id.desc()).limit(50)],
+            "whatsapp":[{"id":j.id,"centre_id":j.centre_id,"report_id":j.report_id,"kind":j.kind,"status":j.status,"attempts":j.attempt_count,"error":j.last_error,"created_at":j.created_at.isoformat() if j.created_at else None} for j in db.query(WAJob).order_by(WAJob.id.desc()).limit(100)]}
+
+@router.get("/api/superadmin/activity")
+def activity(a=Depends(super_admin),db:Session=Depends(get_db)):
+    return [{"id":n.id,"centre_id":n.centre_id,"report_id":n.report_id,"kind":n.kind,"message":n.message,"created_at":n.created_at.isoformat() if n.created_at else None}
+            for n in db.query(Notification).order_by(Notification.id.desc()).limit(100)]
+
+@router.post("/api/superadmin/centres")
+def create_centre(name:str=Form(...),email:str=Form(...),password:str=Form(...),credits:int=Form(10),a=Depends(super_admin),db:Session=Depends(get_db)):
+    email=email.strip().lower(); name=name.strip()
+    if not name or not email or len(password)<10: raise HTTPException(400,"Name, email and a 10+ character password are required")
+    if db.query(Centre).filter_by(email=email).first(): raise HTTPException(409,"Email already exists")
+    if credits<0: raise HTTPException(400,"Credits cannot be negative")
+    c=Centre(name=name,email=email,password_hash=hash_password(password),credits=credits); db.add(c); db.commit(); db.refresh(c)
+    return {"ok":True,"centre_id":c.id,"name":c.name,"email":c.email,"credits":c.credits}
 
 @router.put("/api/superadmin/centres/{centre_id}/credits")
 def adjust_credits(centre_id:int,credits:int=Form(...),a=Depends(super_admin),db:Session=Depends(get_db)):
