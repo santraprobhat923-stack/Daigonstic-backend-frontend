@@ -17,7 +17,7 @@ MAX_ATTEMPTS=5
 RETRY_DELAYS=(15,60,300,900,1800)
 
 def _phone(value):
-    return re.sub(r"\\D","",str(value or ""))
+    return re.sub(r"\D","",str(value or ""))
 
 def _template(name,components):
     return {
