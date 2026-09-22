@@ -2,8 +2,8 @@ fastapi
 uvicorn[standard]
 sqlalchemy
 python-multipart
-pydantic-settings
 pytesseract
 Pillow
 reportlab
 PyPDF2
+requests
