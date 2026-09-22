@@ -7,3 +7,4 @@ Pillow
 reportlab
 PyPDF2
 requests
+razorpay
