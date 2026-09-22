@@ -11,6 +11,8 @@ class Centre(Base):
     upi_id=Column(String,default="",nullable=False)
     credits=Column(Integer,default=10,nullable=False)
     template_path=Column(String,default="",nullable=False)
+    enabled=Column(Boolean,default=True,nullable=False)
+    created_at=Column(DateTime,default=datetime.utcnow)
 class Report(Base):
     __tablename__="reports"
     id=Column(Integer,primary_key=True)
