@@ -86,11 +86,14 @@ Centre APIs use a signed Bearer session token. The server derives the centre ID 
 Every report, notification, setting, credit balance, template and WhatsApp job belongs to a centre.
 
 ## Current frontend UI direction — 22 Sep 2026
-The centre-facing frontend has been redesigned as a professional LIMS-style operations workspace rather than a simple form prototype. The new shell uses a persistent desktop sidebar, compact top bar, responsive mobile bottom navigation, KPI dashboard, quick actions, report table, technician verification workspace, delivery/payment workspace and structured settings. The design is intentionally clean and operational: staff should be able to understand report status and take the next action without navigating through patient-registration or order/billing screens.
+The centre-facing frontend now follows a more restrained modern LIMS visual language based on the diagnostic/laboratory references reviewed for this redesign. The direction is intentionally operational rather than a generic SaaS dashboard: light clinical workspace, strong information hierarchy, compact report tables, subtle borders, restrained blue accenting, clear status badges, and touch-friendly controls.
 
-The UI remains connected to the existing API workflow; this is a presentation-layer redesign and does not reintroduce order prerequisites, patient portals, OTP login or payment blocking of centre downloads. Android Chrome remains a first-class target.
+The redesign keeps the existing centre workflow and API connections intact. It does not reintroduce order prerequisites, patient registration, patient portals, OTP login, or payment blocking of centre downloads. The verification screen remains the most important working surface, while the dashboard, reports, delivery and settings pages provide supporting operations. Android Chrome remains a first-class target.
+
+This is a presentation-layer refinement only. Backend workflow, database models, authentication, OCR, PDF generation, payment state and WhatsApp automation are not changed by the visual redesign.
 
 ## Current implementation
+
 - Centre login and centre creation.
 - Tenant-aware authenticated API.
 - Multiple image upload.
