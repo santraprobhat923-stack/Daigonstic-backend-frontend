@@ -259,3 +259,7 @@ Desktop and mobile now use the same left-sidebar navigation model. On mobile the
 
 ## Workspace bootstrap/cache fix — 22 Sep 2026
 The browser application shell now uses a fresh frontend asset version and a resilient startup path. Local storage access is guarded, startup waits for DOM readiness when needed, and initialization errors surface through the existing workspace error screen instead of leaving the initial “Loading workspace…” shell stuck. No backend workflow or database data is changed.
+
+
+## Frontend syntax bootstrap fix — 22 Sep 2026
+The mobile/desktop sidebar navigation template had a missing JavaScript string terminator after the generated navigation markup. That syntax error prevented the entire app.js file from executing, so the browser stayed on “Loading workspace…” and never reached `/api/me`. The navigation template is now correctly terminated. No backend or database workflow changes were made.
