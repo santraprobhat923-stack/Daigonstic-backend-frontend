@@ -263,3 +263,7 @@ The browser application shell now uses a fresh frontend asset version and a resi
 
 ## Frontend syntax bootstrap fix — 22 Sep 2026
 The mobile/desktop sidebar navigation template had a missing JavaScript string terminator after the generated navigation markup. That syntax error prevented the entire app.js file from executing, so the browser stayed on “Loading workspace…” and never reached `/api/me`. The navigation template is now correctly terminated. No backend or database workflow changes were made.
+
+
+## Mobile viewport containment fix — 22 Sep 2026
+The Android/mobile workspace had horizontal page overflow, allowing the entire application to be dragged sideways into blank space. The frontend now explicitly contains horizontal overflow at the document/app level, constrains workspace/grid/card/chart widths, and collapses the technician verification five-column patient grid to one column on narrow screens. This is a presentation-only responsive fix; backend workflow and stored data are unchanged.
