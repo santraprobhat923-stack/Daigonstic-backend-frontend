@@ -145,3 +145,7 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}
   .pending-action{width:100%}
   .pending-action button{width:100%}
 }
+
+.credit-package{cursor:pointer;text-align:left}
+.credit-package strong{display:block;font-size:16px}
+.credit-package span{display:block;margin-top:5px;color:#667085}
