@@ -4,6 +4,7 @@ from fastapi import FastAPI,UploadFile,File,Form,HTTPException,Request,Depends
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from .database import Base,engine,get_db
 from .models import Centre,Report,Notification
 from .auth import hash_password,check_password,token_for,centre_id
@@ -11,6 +12,23 @@ from .config import STORAGE_DIR,CREDIT_PRICE_INR
 from .services import extract,sha,notify,queue_wa,make_pdf,report_dict
 from .workers.whatsapp_worker import start_worker
 Base.metadata.create_all(engine)
+def migrate_legacy_sqlite():
+    if "sqlite" not in str(engine.url): return
+    with engine.begin() as conn:
+        tables=[x[0] for x in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))]
+        if "centres" in tables:
+            cols=[x[1] for x in conn.execute(text("PRAGMA table_info(centres)"))]
+            if "password_hash" not in cols: conn.execute(text("ALTER TABLE centres ADD COLUMN password_hash VARCHAR"))
+            if "whatsapp_enabled" not in cols: conn.execute(text("ALTER TABLE centres ADD COLUMN whatsapp_enabled BOOLEAN DEFAULT 0"))
+            if "upi_id" not in cols: conn.execute(text("ALTER TABLE centres ADD COLUMN upi_id VARCHAR DEFAULT ''"))
+            if "credits" not in cols: conn.execute(text("ALTER TABLE centres ADD COLUMN credits INTEGER DEFAULT 10"))
+            if "template_path" not in cols: conn.execute(text("ALTER TABLE centres ADD COLUMN template_path VARCHAR DEFAULT ''"))
+            if "password" in cols: conn.execute(text("UPDATE centres SET password_hash=password WHERE (password_hash IS NULL OR password_hash='') AND password IS NOT NULL"))
+        if "reports" in tables:
+            cols=[x[1] for x in conn.execute(text("PRAGMA table_info(reports)"))]
+            if "image_hashes" not in cols: conn.execute(text("ALTER TABLE reports ADD COLUMN image_hashes TEXT DEFAULT '[]'"))
+            if "token" not in cols: conn.execute(text("ALTER TABLE reports ADD COLUMN token VARCHAR"))
+migrate_legacy_sqlite()
 app=FastAPI(title="Aarogyam")
 app.mount("/static",StaticFiles(directory="frontend"),name="static")
 @app.on_event("startup")
