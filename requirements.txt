@@ -8,3 +8,4 @@ reportlab
 PyPDF2
 requests
 razorpay
+\npython-dotenv\n
