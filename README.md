@@ -251,3 +251,7 @@ The selected visual direction should be treated as the current design baseline f
 
 ## Light premium SaaS visual system — 22 Sep 2026
 The frontend has been redesigned to follow the selected Reference C premium SaaS composition while using a light background. This is a structural visual-system redesign rather than a simple color change: light navigation rail, spacious SaaS cards, rounded surfaces, subtle borders/shadows, purple accent actions, KPI tiles, modern upload/review surfaces, and responsive mobile treatment. Existing frontend APIs and Aarogyam workflow are unchanged.
+
+
+## Sidebar + dashboard visualization update — 22 Sep 2026
+Desktop and mobile now use the same left-sidebar navigation model. On mobile the sidebar opens from a menu button as a slide-in drawer; the previous fixed footer navigation is removed. The dashboard now includes a premium activity graph, workflow-health visualization and live-status styling. This is presentation-only and does not alter APIs or the diagnostic workflow.
