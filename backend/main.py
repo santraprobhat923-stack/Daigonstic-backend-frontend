@@ -1,4 +1,4 @@
-import json,secrets
+import json,secrets,hmac,hashlib
 from pathlib import Path
 from fastapi import FastAPI,UploadFile,File,Form,HTTPException,Request,Depends,BackgroundTasks
 from fastapi.responses import FileResponse,HTMLResponse
@@ -6,11 +6,13 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from .database import Base,engine,get_db,SessionLocal
-from .models import Centre,Report,Notification
+from .models import Centre,Report,Notification,CreditOrder,CreditTransaction
 from .auth import hash_password,check_password,token_for,centre_id
-from .config import STORAGE_DIR,CREDIT_PRICE_INR,WHATSAPP_PROVIDER,WHATSAPP_PAYMENT_TEMPLATE,WHATSAPP_REPORT_TEMPLATE
+from .config import STORAGE_DIR,CREDIT_PRICE_INR,WHATSAPP_PROVIDER,WHATSAPP_PAYMENT_TEMPLATE,WHATSAPP_REPORT_TEMPLATE,RAZORPAY_KEY_ID,RAZORPAY_KEY_SECRET,RAZORPAY_WEBHOOK_SECRET
 from .services import extract,sha,notify,queue_wa,make_pdf,report_dict
 from .workers.whatsapp_worker import start_worker
+try: import razorpay
+except Exception: razorpay=None
 Base.metadata.create_all(engine)
 def migrate_legacy_sqlite():
     if "sqlite" not in str(engine.url): return
@@ -67,6 +69,74 @@ def login(email:str=Form(...),password:str=Form(...),db:Session=Depends(get_db))
     return {"access_token":token_for(c.id),"centre_id":c.id,"name":c.name,"credits":c.credits}
 @app.get("/api/me")
 def me(c=Depends(current)): return {"centre_id":c.id,"name":c.name,"email":c.email,"credits":c.credits}
+def _razorpay_client():
+    if not razorpay or not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET:
+        raise HTTPException(503,"Razorpay is not configured on the server")
+    return razorpay.Client(auth=(RAZORPAY_KEY_ID,RAZORPAY_KEY_SECRET))
+
+@app.get("/api/credits")
+def credits(c=Depends(current),db:Session=Depends(get_db)):
+    tx=db.query(CreditTransaction).filter_by(centre_id=c.id).order_by(CreditTransaction.id.desc()).limit(100).all()
+    return {"balance":c.credits,"price_inr":CREDIT_PRICE_INR,"transactions":[
+        {"id":t.id,"type":t.type,"credits":t.credits,"amount_inr":t.amount_inr,"reference":t.reference,"created_at":t.created_at.isoformat()}
+        for t in tx
+    ]}
+
+@app.post("/api/credits/razorpay/order")
+def create_credit_order(credits:int=Form(...),c=Depends(current),db:Session=Depends(get_db)):
+    if credits<1 or credits>100000: raise HTTPException(400,"Choose a valid credit quantity")
+    client=_razorpay_client()
+    amount_paise=int(round(credits*CREDIT_PRICE_INR*100))
+    if amount_paise<100: raise HTTPException(400,"Recharge amount is below Razorpay minimum")
+    try:
+        order=client.order.create({"amount":amount_paise,"currency":"INR","receipt":f"centre_{c.id}_{secrets.token_hex(6)}","notes":{"centre_id":str(c.id),"credits":str(credits)}})
+    except Exception:
+        raise HTTPException(502,"Could not create Razorpay order")
+    row=CreditOrder(centre_id=c.id,razorpay_order_id=order["id"],credits=credits,amount_paise=amount_paise,status="CREATED")
+    db.add(row); db.commit()
+    return {"key_id":RAZORPAY_KEY_ID,"order_id":order["id"],"amount":amount_paise,"currency":"INR","credits":credits}
+
+@app.post("/api/credits/razorpay/verify")
+def verify_credit_payment(order_id:str=Form(...),payment_id:str=Form(...),signature:str=Form(...),c=Depends(current),db:Session=Depends(get_db)):
+    row=db.query(CreditOrder).filter_by(razorpay_order_id=order_id,centre_id=c.id).first()
+    if not row: raise HTTPException(404,"Recharge order not found")
+    if row.status=="PAID": return {"ok":True,"credits":c.credits,"message":"Recharge already applied"}
+    try:
+        _razorpay_client().utility.verify_payment_signature({"razorpay_order_id":order_id,"razorpay_payment_id":payment_id,"razorpay_signature":signature})
+    except Exception:
+        raise HTTPException(400,"Razorpay payment verification failed")
+    existing=db.query(CreditTransaction).filter_by(razorpay_payment_id=payment_id).first()
+    if existing:
+        row.status="PAID"; db.commit()
+        return {"ok":True,"credits":c.credits,"message":"Recharge already recorded"}
+    c.credits += row.credits
+    row.status="PAID"
+    db.add(CreditTransaction(centre_id=c.id,type="RECHARGE",credits=row.credits,amount_inr=row.amount_paise/100,reference=order_id,razorpay_payment_id=payment_id))
+    notify(db,c.id,None,"CREDIT_RECHARGE",f"{row.credits} credits added successfully.")
+    db.commit()
+    return {"ok":True,"credits":c.credits,"message":f"{row.credits} credits added"}
+
+@app.post("/api/credits/razorpay/webhook")
+async def razorpay_webhook(request:Request,db:Session=Depends(get_db)):
+    if not RAZORPAY_WEBHOOK_SECRET: raise HTTPException(503,"Razorpay webhook secret is not configured")
+    body=await request.body()
+    received=request.headers.get("x-razorpay-signature","")
+    expected=hmac.new(RAZORPAY_WEBHOOK_SECRET.encode(),body,hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(received,expected): raise HTTPException(400,"Invalid webhook signature")
+    try: payload=json.loads(body)
+    except Exception: raise HTTPException(400,"Invalid webhook payload")
+    if payload.get("event")=="payment.captured":
+        ent=payload.get("payload",{}).get("payment",{}).get("entity",{})
+        payment_id=ent.get("id",""); order_id=ent.get("order_id","")
+        row=db.query(CreditOrder).filter_by(razorpay_order_id=order_id).first()
+        if row and row.status!="PAID" and not db.query(CreditTransaction).filter_by(razorpay_payment_id=payment_id).first():
+            centre=db.get(Centre,row.centre_id)
+            if centre:
+                centre.credits += row.credits; row.status="PAID"
+                db.add(CreditTransaction(centre_id=centre.id,type="RECHARGE",credits=row.credits,amount_inr=row.amount_paise/100,reference=order_id,razorpay_payment_id=payment_id))
+                notify(db,centre.id,None,"CREDIT_RECHARGE",f"{row.credits} credits added successfully.")
+                db.commit()
+    return {"ok":True}
 def process_ocr(report_id, centre_id, paths):
     db=SessionLocal()
     try:
@@ -134,12 +204,15 @@ def awaitable_read(f):
 def verify(rid:int,data:str=Form(...),c=Depends(current),db:Session=Depends(get_db)):
     r=db.get(Report,rid)
     if not r or r.centre_id!=c.id: raise HTTPException(404,"Report not found")
-    if r.status not in ("OCR_REVIEW","GENERATED"): raise HTTPException(409,"Report already released or paid")
+    if r.status=="GENERATED": return report_dict(r)
+    if r.status!="OCR_REVIEW": raise HTTPException(409,"Report is not ready for verification")
     if c.credits<1: raise HTTPException(400,"Insufficient credits")
     try:d=json.loads(data)
     except: raise HTTPException(400,"Invalid verification data")
     out=STORAGE_DIR/f"centre_{c.id}"/"reports"/f"report_{r.id}.pdf"; make_pdf(c,r,d,out)
-    c.credits-=1; r.verified_data=data; p=d.get("patient",{}); r.patient_name=p.get("name",""); r.patient_age=p.get("age",""); r.patient_sex=p.get("sex",""); r.patient_phone=p.get("phone",""); r.patient_code=p.get("code",""); r.pdf_path=str(out); r.status="GENERATED"; r.payment="PENDING" if c.whatsapp_enabled else "NOT_REQUIRED"
+    c.credits-=1
+    db.add(CreditTransaction(centre_id=c.id,type="REPORT_USAGE",credits=-1,amount_inr=0,reference=f"report_{r.id}"))
+    r.verified_data=data; p=d.get("patient",{}); r.patient_name=p.get("name",""); r.patient_age=p.get("age",""); r.patient_sex=p.get("sex",""); r.patient_phone=p.get("phone",""); r.patient_code=p.get("code",""); r.pdf_path=str(out); r.status="GENERATED"; r.payment="PENDING" if c.whatsapp_enabled else "NOT_REQUIRED"
     notify(db,c.id,r.id,"REPORT_GENERATED",f"Report #{r.id} generated. Centre download is ready."); db.commit(); return report_dict(r)
 @app.get("/api/reports")
 def reports(search:str="",c=Depends(current),db:Session=Depends(get_db)):
