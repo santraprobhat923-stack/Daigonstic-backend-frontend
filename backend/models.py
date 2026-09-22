@@ -30,6 +30,27 @@ class Report(Base):
     payment=Column(String,default="NOT_REQUIRED")
     token=Column(String,unique=True,index=True)
     created_at=Column(DateTime,default=datetime.utcnow)
+class CreditOrder(Base):
+    __tablename__="credit_orders"
+    id=Column(Integer,primary_key=True)
+    centre_id=Column(Integer,index=True,nullable=False)
+    razorpay_order_id=Column(String,unique=True,index=True,nullable=False)
+    credits=Column(Integer,nullable=False)
+    amount_paise=Column(Integer,nullable=False)
+    status=Column(String,default="CREATED",nullable=False)
+    created_at=Column(DateTime,default=datetime.utcnow)
+
+class CreditTransaction(Base):
+    __tablename__="credit_transactions"
+    id=Column(Integer,primary_key=True)
+    centre_id=Column(Integer,index=True,nullable=False)
+    type=Column(String,nullable=False)
+    credits=Column(Integer,nullable=False)
+    amount_inr=Column(Float,default=0)
+    reference=Column(String,default="")
+    razorpay_payment_id=Column(String,unique=True,index=True,nullable=True)
+    created_at=Column(DateTime,default=datetime.utcnow)
+
 class Notification(Base):
     __tablename__="notifications"
     id=Column(Integer,primary_key=True)
