@@ -230,3 +230,20 @@ If the owner says 'continue Aarogyam' in a new page, first read this README and 
 
 ## Mental model
 Capture image → OCR → Verify → Generate PDF → Centre downloads immediately → Optional payment → Automatic WhatsApp delivery/release → Notifications.
+
+## Premium modern SaaS visual direction — 22 Sep 2026
+
+The centre-facing UI has now been visually moved toward the selected premium modern SaaS reference direction. This is a presentation-layer change only.
+
+Design characteristics:
+- premium SaaS-style spacing, rounded cards and softer elevation
+- dark, compact navigation rail with a clear active state
+- refined indigo primary accent and subtle gradients
+- cleaner typography and stronger visual hierarchy
+- modern KPI cards, tables, upload surface and verification cards
+- polished login experience
+- responsive Android/mobile bottom navigation retained
+- existing API calls, routes, authentication and diagnostic workflow are unchanged
+
+The selected visual direction should be treated as the current design baseline for future UI work. Do not replace it with a generic hospital/LIMS template unless explicitly requested.
+
