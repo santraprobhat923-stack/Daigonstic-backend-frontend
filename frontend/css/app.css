@@ -116,3 +116,18 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}
 /* Dark sidebar theme — 22 Sep 2026 */
 .sidebar .brand-mark,.mobile-sidebar .brand-mark{box-shadow:0 9px 24px rgba(109,93,252,.30)}
 @media(max-width:900px){.main-menu-button button{background:#111321;color:#fff;border-color:#252940;box-shadow:0 7px 20px rgba(12,15,28,.16)}}
+
+
+.upload-status{margin:18px auto 0;max-width:620px;display:flex;align-items:flex-start;gap:12px;text-align:left;padding:14px 16px;border:1px solid var(--line,#e5e7ef);border-radius:14px;background:#f8f9fc;color:#25283a}
+.upload-status b{display:block;font-size:13px;line-height:1.35}
+.upload-status small{display:block;margin-top:4px;color:#72778a;font-size:12px;line-height:1.4}
+.upload-spinner{width:18px;height:18px;flex:0 0 18px;border:2px solid #d9d5ff;border-top-color:#6d5ce7;border-radius:50%;animation:aarogyam-spin .8s linear infinite}
+.upload-status.success{background:#f3fbf6;border-color:#cdebd8}
+.upload-status.success .upload-spinner{display:none}
+.upload-status.success:before{content:"✓";display:grid;place-items:center;width:18px;height:18px;flex:0 0 18px;border-radius:50%;background:#2e9b62;color:#fff;font-size:12px;font-weight:700}
+.upload-status.error{background:#fff7f7;border-color:#f0cccc}
+.upload-status.error .upload-spinner{display:none}
+.upload-status.error:before{content:"!";display:grid;place-items:center;width:18px;height:18px;flex:0 0 18px;border-radius:50%;background:#c94b4b;color:#fff;font-size:12px;font-weight:700}
+.upload-ready{display:grid;place-items:center;width:18px;height:18px;flex:0 0 18px;border-radius:50%;background:#eceafd;color:#6757d9;font-size:11px;font-weight:700}
+#uploadStartBtn:disabled{opacity:.65;cursor:wait}
+@keyframes aarogyam-spin{to{transform:rotate(360deg)}}
