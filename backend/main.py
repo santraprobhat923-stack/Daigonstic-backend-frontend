@@ -26,6 +26,8 @@ def migrate_legacy_sqlite():
             if "upi_id" not in cols: conn.execute(text("ALTER TABLE centres ADD COLUMN upi_id VARCHAR DEFAULT ''"))
             if "credits" not in cols: conn.execute(text("ALTER TABLE centres ADD COLUMN credits INTEGER DEFAULT 10"))
             if "template_path" not in cols: conn.execute(text("ALTER TABLE centres ADD COLUMN template_path VARCHAR DEFAULT ''"))
+            if "enabled" not in cols: conn.execute(text("ALTER TABLE centres ADD COLUMN enabled BOOLEAN DEFAULT 1"))
+            if "created_at" not in cols: conn.execute(text("ALTER TABLE centres ADD COLUMN created_at DATETIME"))
             if "password" in cols:
                 rows=conn.execute(text("SELECT id,password FROM centres WHERE (password_hash IS NULL OR password_hash='') AND password IS NOT NULL")).fetchall()
                 for row in rows:
@@ -53,6 +55,7 @@ def startup():
 def current(request:Request,db:Session=Depends(get_db)):
     cid=centre_id(request); c=db.get(Centre,cid)
     if not c: raise HTTPException(401,"Centre not found")
+    if not c.enabled: raise HTTPException(403,"Centre account is suspended. Contact Aarogyam support.")
     return c
 @app.get("/superadmin")
 def superadmin_home():
