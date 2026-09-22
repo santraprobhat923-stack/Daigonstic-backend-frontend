@@ -85,6 +85,11 @@ The obsolete monolithic backend/app.py has been removed. Do not recreate it.
 Centre APIs use a signed Bearer session token. The server derives the centre ID from the validated token. Do not trust a browser-supplied centre_id for authorization.
 Every report, notification, setting, credit balance, template and WhatsApp job belongs to a centre.
 
+## Current frontend UI direction — 22 Sep 2026
+The centre-facing frontend has been redesigned as a professional LIMS-style operations workspace rather than a simple form prototype. The new shell uses a persistent desktop sidebar, compact top bar, responsive mobile bottom navigation, KPI dashboard, quick actions, report table, technician verification workspace, delivery/payment workspace and structured settings. The design is intentionally clean and operational: staff should be able to understand report status and take the next action without navigating through patient-registration or order/billing screens.
+
+The UI remains connected to the existing API workflow; this is a presentation-layer redesign and does not reintroduce order prerequisites, patient portals, OTP login or payment blocking of centre downloads. Android Chrome remains a first-class target.
+
 ## Current implementation
 - Centre login and centre creation.
 - Tenant-aware authenticated API.
