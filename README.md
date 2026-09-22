@@ -247,3 +247,7 @@ Design characteristics:
 
 The selected visual direction should be treated as the current design baseline for future UI work. Do not replace it with a generic hospital/LIMS template unless explicitly requested.
 
+
+
+## Light premium SaaS visual system — 22 Sep 2026
+The frontend has been redesigned to follow the selected Reference C premium SaaS composition while using a light background. This is a structural visual-system redesign rather than a simple color change: light navigation rail, spacious SaaS cards, rounded surfaces, subtle borders/shadows, purple accent actions, KPI tiles, modern upload/review surfaces, and responsive mobile treatment. Existing frontend APIs and Aarogyam workflow are unchanged.
