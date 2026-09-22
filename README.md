@@ -328,3 +328,44 @@ The centre UI exposes the active provider and template names in **Centre Setting
 ### Delivery rule
 
 Payment is a **patient-release/delivery state**, not a PDF-generation prerequisite. Aarogyam continues to generate and make the centre PDF downloadable immediately after technician verification. WhatsApp automation operates after that point.
+
+## Saved progress checkpoint — 22 Sep 2026
+
+The current implementation checkpoint is preserved here for continuation.
+
+### Completed in this phase
+- Asynchronous OCR intake: upload requests return without waiting for Tesseract.
+- **Pending Verification** queue added so centres can upload multiple slips and review OCR jobs later.
+- Queue polling distinguishes processing jobs from OCR-ready jobs and opens the existing editable verification flow.
+- Premium responsive centre UI, dark sidebar/drawer, dashboard visualizations and mobile overflow fixes are preserved.
+- Root HTML serving was hardened for Android/Termux shared storage.
+- Frontend startup/loading and JavaScript error handling were hardened to avoid blank/stuck workspace states.
+- PDF generation remains independent of payment; centre download remains available immediately after verification.
+- WhatsApp automation is implemented with mock provider by default.
+- WhatsApp payment-request and final-report jobs are idempotent and processed by a background worker with retry/dead-letter states.
+- Real Meta WhatsApp delivery support is wired behind environment configuration and requires public HTTPS plus valid Meta credentials/templates.
+- README is the handover source of truth; future workflow/architecture/API/database/deployment/important implementation changes must be recorded here.
+
+### Current testing checkpoint
+The latest WhatsApp and Pending Verification changes have been committed to main, but the owner has not yet completed the fresh local pull/restart/test cycle after these latest changes.
+
+Recommended next local startup:
+cd /storage/emulated/0/diagnostic_backend
+git pull origin main
+uvicorn backend.main:app --host 0.0.0.0 --port 8000
+
+Then test the workflow in this order:
+1. Upload several analyzer images and confirm they return quickly.
+2. Open **Pending Verification** and confirm jobs move from processing to OCR-ready.
+3. Open each job, verify/edit patient details and test values, then generate the PDF.
+4. Confirm the centre can download the PDF without payment.
+5. With WhatsApp OFF, confirm no WhatsApp job is created.
+6. With WhatsApp ON + UPI configured, confirm a Due report queues PAYMENT_REQUEST and the mock worker reaches SENT.
+7. Mark/verify payment and confirm FINAL_REPORT is queued and reaches SENT in mock mode.
+8. Confirm delivery notifications appear.
+9. Only after the local workflow is stable, move the same build to the real server and configure Meta/public HTTPS.
+
+### Important continuity rule
+Do not reset the database, recreate the centre, or reintroduce order/billing prerequisites merely because a workflow screen is incomplete. Diagnose the actual API/frontend state first. The intended workflow remains:
+
+**Capture image → OCR → Pending Verification → Technician Verify/Edit → Generate PDF → Centre Download → Optional Payment → Automatic WhatsApp Release/Delivery → Notifications.**
