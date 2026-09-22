@@ -132,6 +132,14 @@ Observed healthy requests:
 
 A favicon.ico 404 was observed. This is harmless and does not affect application functionality.
 
+### Latest server-side issue and fix — 22 Sep 2026
+
+Uvicorn was logging `RuntimeError: Response content longer than Content-Length` for `GET /` while returning 200 OK. The root route was using `FileResponse` for `frontend/index.html`; on the Android/Termux shared-storage environment this could produce a response-body/content-length mismatch.
+
+The root route now reads `frontend/index.html` directly and returns it through FastAPI `HTMLResponse`. This is isolated to serving the frontend shell and does not change the diagnostic workflow, authentication, OCR, PDF, payment or WhatsApp logic.
+
+After pulling the latest main branch, restart Uvicorn and refresh Chrome.
+
 ### Latest issue and fix
 The browser displayed a completely blank page even though FastAPI was returning 200 OK. The frontend was patched directly in GitHub.
 
