@@ -271,3 +271,7 @@ The Android/mobile workspace had horizontal page overflow, allowing the entire a
 
 ## Dark sidebar theme — 22 Sep 2026
 The centre-facing navigation rail and mobile slide-in drawer now use a dark premium theme while the main workspace remains light. Navigation uses muted light text, a violet active state, subtle hover surfaces, and a dark mobile menu button. This is presentation-only; APIs, authentication, OCR, PDF, payment and WhatsApp workflow are unchanged.
+
+
+## OCR extraction upgrade — 22 Sep 2026
+The OCR service has been strengthened for real photographed analyzer slips. It now runs multiple Tesseract passes (PSM 6, 4 and 11) over grayscale/autocontrast/sharpened images, then merges the readings. Patient metadata parsing is line-anchored so the patient name is not allowed to consume Age/Sex/Phone/Patient-ID fields. Laboratory result parsing now recognizes common diagnostic units and irregular/table-style rows, while deduplicating repeated OCR readings. Test names and units are taken from the image rather than hard-coded to CBC/thyroid/stool/chemistry types. OCR remains draft data and technician verification remains authoritative.
