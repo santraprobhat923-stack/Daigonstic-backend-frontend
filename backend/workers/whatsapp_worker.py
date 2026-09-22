@@ -1,8 +1,8 @@
 import json,time,threading
 from pathlib import Path
-from .config import WHATSAPP_PROVIDER
-from .database import SessionLocal
-from .models import WAJob
+from ..config import WHATSAPP_PROVIDER
+from ..database import SessionLocal
+from ..models import WAJob
 try:
  import requests
 except Exception: requests=None
