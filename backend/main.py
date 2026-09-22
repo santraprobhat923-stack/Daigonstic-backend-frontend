@@ -9,9 +9,12 @@ from .models import Centre,Report,Notification
 from .auth import hash_password,check_password,token_for,centre_id
 from .config import STORAGE_DIR,CREDIT_PRICE_INR
 from .services import extract,sha,notify,queue_wa,make_pdf,report_dict
+from .workers.whatsapp_worker import start_worker
 Base.metadata.create_all(engine)
 app=FastAPI(title="Aarogyam")
 app.mount("/static",StaticFiles(directory="frontend"),name="static")
+@app.on_event("startup")
+def startup(): start_worker()
 def current(request:Request,db:Session=Depends(get_db)):
     cid=centre_id(request); c=db.get(Centre,cid)
     if not c: raise HTTPException(401,"Centre not found")
