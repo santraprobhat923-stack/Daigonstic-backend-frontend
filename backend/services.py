@@ -52,9 +52,44 @@ def _first_field(readings,patterns):
                     value=_clean_line(m.group(1))
                     if value: candidates.append(value)
     if not candidates: return ""
-    labels=r"\b(?:age|sex|gender|mobile|phone|whatsapp|patient\s*(?:id|code))\b"
+    labels=r"\b(?:age|sex|gender|mobile|phone|whatsapp|patient\s*(?:id|code)|uhid|referred\s*by|received\s*on|reported\s*on)\b"
     clean=[x for x in candidates if not re.search(labels,x,re.I)]
-    return min(clean or candidates,key=len)
+    return max(clean,key=lambda x:(len(x),len(x.split()))) if clean else max(candidates,key=len)
+
+def _patient_fields(readings):
+    fields={"name":[],"age":[],"sex":[],"phone":[],"code":[],"uhid":[],"referred_by":[],"received_on":[],"reported_on":[]}
+    patterns={
+      "name":[r"\bpatient\s*(?:name|nm)\s*[:#-]\s*(.+?)$",r"\bname\s*[:#-]\s*(.+?)$"],
+      "age":[r"\bage\s*[/,:#-]?\s*(\d{1,3})(?:\s*(?:years?|yrs?))?\b"],
+      "sex":[r"\b(?:sex|gender)\s*[/,:#-]?\s*(male|female|m|f)\b"],
+      "phone":[r"\b(?:phone|mobile|mob|contact|whatsapp)\s*(?:no\.?|number)?\s*[:#-]?\s*(\+?\d[\d\s().-]{8,})"],
+      "code":[r"\b(?:patient\s*(?:id|code)|patient\s*no\.?|id\s*number)\s*[:#-]?\s*([A-Za-z0-9_/-]{3,})\b"],
+      "uhid":[r"\b(?:uhid|uhid\s*no\.?)\s*[:#-]?\s*([A-Za-z0-9_/-]{3,})\b"],
+      "referred_by":[r"\b(?:referred\s*by|ref\.?\s*by|referrer)\s*[:#-]\s*(.+?)$"],
+      "received_on":[r"\b(?:received\s*on|sample\s*(?:received|collection)\s*date)\s*[:#-]?\s*([0-9A-Za-z ./:-]{6,})$"],
+      "reported_on":[r"\b(?:reported\s*on|report\s*date)\s*[:#-]?\s*([0-9A-Za-z ./:-]{6,})$"]
+    }
+    for text in readings:
+        for raw in text.splitlines():
+            line=_clean_line(raw)
+            if not line: continue
+            for key,ps in patterns.items():
+                for p in ps:
+                    m=re.search(p,line,re.I)
+                    if m:
+                        v=_clean_line(m.group(1))
+                        if v and len(v)<120: fields[key].append(v)
+    out={}
+    for key,vals in fields.items():
+        if not vals: out[key]=""; continue
+        norm={}
+        for v in vals:
+            k=re.sub(r"[^a-z0-9]+","",v.lower())
+            norm[k]=norm.get(k,0)+1
+        out[key]=max(vals,key=lambda v:(norm[re.sub(r"[^a-z0-9]+","",v.lower())],len(v)))
+    if out["name"]:
+        out["name"]=re.sub(r"\s*(?:age|sex|gender|mobile|phone|uhid|patient\s*(?:id|code))\s*[:#-].*$","",out["name"],flags=re.I).strip(" :-")
+    return out
 
 def _parse_tests(readings):
     tests=[]; seen=set(); current_section="Examination Results"
@@ -113,15 +148,7 @@ def extract(path):
     readings=_ocr_variants(path)
     combined="\n".join(readings)
     patient={
-        "name":_first_field(readings,[r"\bpatient\s*name\s*[:#-]\s*(.+?)$",r"\bname\s*[:#-]\s*(.+?)$"]),
-        "age":_first_field(readings,[r"\bage\s*[:#-]?\s*(\d{1,3})\b"]),
-        "sex":_first_field(readings,[r"\b(?:sex|gender)\s*[:#-]?\s*(male|female|m|f)\b"]),
-        "phone":_first_field(readings,[r"\b(?:phone|mobile|whatsapp)\s*[:#-]?\s*(\+?\d[\d -]{8,})"]),
-        "code":_first_field(readings,[r"\b(?:patient\s*(?:id|code)|id\s*number)\s*[:#-]?\s*([A-Za-z0-9_/-]{3,})\b"]),
-        "uhid":_first_field(readings,[r"\buhid\s*[:#-]?\s*([A-Za-z0-9_/-]{3,})\b"]),
-        "referred_by":_first_field(readings,[r"\b(?:referred\s*by|ref\.?\s*by)\s*[:#-]?\s*(.+?)$"]),
-        "received_on":_first_field(readings,[r"\breceived\s*on\s*[:#-]?\s*([0-9A-Za-z ./-]{6,})$"]),
-        "reported_on":_first_field(readings,[r"\breported\s*on\s*[:#-]?\s*([0-9A-Za-z ./-]{6,})$"]),
+        **_patient_fields(readings),
     }
     if re.search(r"\b(?:age|sex|gender|mobile|phone|patient\s*(?:id|code)|uhid|referred|received|reported)\b",patient["name"],re.I):
         patient["name"]=""
