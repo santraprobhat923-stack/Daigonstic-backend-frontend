@@ -47,11 +47,19 @@ async function startRecharge(quantity){
     new Razorpay(options).open();
   }catch(e){if(status)status.innerHTML='<span>!</span><div><b>Recharge could not start</b><small>'+esc(e.message)+'</small></div>';alert(e.message)}
 }
-function capture(){currentPage="capture";app.innerHTML=shell('<div class="wrap"><div class="page-head"><div><div class="eyebrow">Report intake</div><h1>New report</h1><p>Capture one or more analyzer/report images. No patient registration is required.</p></div></div><div class="card"><div class="upload-zone"><div class="upload-icon">▣</div><h3>Upload analyzer images</h3><p class="muted">Take a clear photo with the centre phone or select images from the device.</p><div class="capture-actions"><button type="button" class="primary" onclick="openCamera()">📷 Take Photo</button><button type="button" onclick="openGallery()">📁 Choose from Gallery</button></div><input id="cameraInput" type="file" accept="image/*" capture="environment" hidden><input id="imgs" type="file" accept="image/*" multiple hidden><div id="selectedFiles" class="muted" aria-live="polite">No images selected.</div><button id="uploadStartBtn" class="primary" onclick="upload()">Upload & start OCR</button><div id="uploadStatus" class="upload-status" role="status" aria-live="polite"><span class="upload-ready">✓</span><div><b>Ready to upload</b><small>Take a photo or choose images. Aarogyam will create the report job and read the slip with OCR.</small></div></div></div><p class="footer-note">OCR data is draft data. A technician reviews and approves every report before it is finalized.</p></div></div>')}
-function openCamera(){document.getElementById("cameraInput")?.click()}function openGallery(){document.getElementById("imgs")?.click()}function renderSelectedFiles(){const a=[...(document.getElementById("imgs")?.files||[])],cam=document.getElementById("cameraInput")?.files?.[0];const all=cam?[cam,...a]:a;const el=document.getElementById("selectedFiles");if(el)el.textContent=all.length?(all.length+" image"+(all.length===1?"":"s")+" selected"):"No images selected."}document.getElementById("cameraInput")?.addEventListener("change",e=>{const f=e.target.files?.[0];if(!f)return;const dt=new DataTransfer();dt.items.add(f);document.getElementById("imgs").files=dt.files;renderSelectedFiles()});document.getElementById("imgs")?.addEventListener("change",renderSelectedFiles);async function upload(){
-  const el=document.getElementById("imgs"),btn=document.querySelector("#uploadStartBtn");
-  if(!el.files.length)return alert("Choose at least one image");
-  const files=[...el.files];const f=new FormData();
+let intakeFiles=[];
+function capture(){currentPage="capture";intakeFiles=[];app.innerHTML=shell('<div class="wrap"><div class="page-head"><div><div class="eyebrow">Report intake</div><h1>New report</h1><p>Take photos or choose report images. You can collect several slips before starting OCR.</p></div></div><div class="card"><div class="upload-zone"><div class="upload-icon">▣</div><h3>Capture diagnostic report</h3><p class="muted">Use the centre phone camera for a fresh slip, or choose existing images from the gallery.</p><div class="capture-actions"><button type="button" class="primary" onclick="openCamera()">📷 Take Photo</button><button type="button" onclick="openGallery()">📁 Choose from Gallery</button></div><input id="cameraInput" type="file" accept="image/*" capture="environment" hidden onchange="addCameraFile(this.files[0]);this.value=''"><input id="imgs" type="file" accept="image/*" multiple hidden onchange="addGalleryFiles(this.files)"><div id="selectedFiles" class="selected-files" aria-live="polite">No images selected yet.</div><div id="selectedFileList" class="selected-file-list"></div><button id="uploadStartBtn" class="primary" onclick="upload()" disabled>Upload & start OCR</button><div id="uploadStatus" class="upload-status" role="status" aria-live="polite"><span class="upload-ready">✓</span><div><b>Ready</b><small>Add one or more report images. OCR starts after you tap Upload & start OCR.</small></div></div></div><p class="footer-note">OCR is draft data. A technician reviews and approves every report before it is finalized.</p></div></div>')}
+function openCamera(){document.getElementById("cameraInput")?.click()}
+function openGallery(){document.getElementById("imgs")?.click()}
+function addCameraFile(file){if(file)appendIntakeFiles([file])}
+function addGalleryFiles(files){appendIntakeFiles([...(files||[])])}
+function appendIntakeFiles(files){const seen=new Set(intakeFiles.map(f=>f.name+"|"+f.size+"|"+f.lastModified));for(const f of files){if(!f||!f.type?.startsWith("image/"))continue;const key=f.name+"|"+f.size+"|"+f.lastModified;if(!seen.has(key)){intakeFiles.push(f);seen.add(key)}}renderSelectedFiles()}
+function removeIntakeFile(i){intakeFiles.splice(i,1);renderSelectedFiles()}
+function renderSelectedFiles(){const count=intakeFiles.length,el=document.getElementById("selectedFiles"),list=document.getElementById("selectedFileList"),btn=document.getElementById("uploadStartBtn");if(el)el.textContent=count?(count+" image"+(count===1?"":"s")+" ready to upload"):"No images selected yet.";if(btn)btn.disabled=!count;if(list)list.innerHTML=intakeFiles.map((f,i)=>'<div class="selected-file"><span><b>'+esc(f.name)+'</b><small>'+Math.max(1,Math.round(f.size/1024))+' KB</small></span><button type="button" aria-label="Remove '+esc(f.name)+'" onclick="removeIntakeFile('+i+')">×</button></div>').join("")}
+async function upload(){
+  const btn=document.querySelector("#uploadStartBtn");
+  if(!intakeFiles.length)return alert("Add at least one report image");
+  const files=[...intakeFiles];const f=new FormData();
   files.forEach(x=>f.append("files",x));
   if(btn)btn.disabled=true;
   setUploadStatus("Uploading slip…","Creating the report job. OCR will continue in the background.");
@@ -61,6 +69,7 @@ function openCamera(){document.getElementById("cameraInput")?.click()}function o
     setUploadStatus("Report job created.","Report #"+j.report.id+" is being read by OCR. You can upload more slips now.","success");
     if(dup)setUploadStatus("Report job created.","Report #"+j.report.id+" · "+added+" new image"+(added===1?"":"s")+", "+dup+" duplicate"+(dup===1?"":"s")+" skipped.","success");
     setTimeout(()=>pending(),450);
+    intakeFiles=[];
   }catch(e){
     setUploadStatus("Upload could not be completed.",e.message||"Please try the image again.","error");
     if(btn)btn.disabled=false;
