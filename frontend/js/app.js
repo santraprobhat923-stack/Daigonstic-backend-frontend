@@ -56,6 +56,12 @@ function addGalleryFiles(files){appendIntakeFiles([...(files||[])])}
 function appendIntakeFiles(files){const seen=new Set(intakeFiles.map(f=>f.name+"|"+f.size+"|"+f.lastModified));for(const f of files){if(!f||!f.type?.startsWith("image/"))continue;const key=f.name+"|"+f.size+"|"+f.lastModified;if(!seen.has(key)){intakeFiles.push(f);seen.add(key)}}renderSelectedFiles()}
 function removeIntakeFile(i){intakeFiles.splice(i,1);renderSelectedFiles()}
 function renderSelectedFiles(){const count=intakeFiles.length,el=document.getElementById("selectedFiles"),list=document.getElementById("selectedFileList"),btn=document.getElementById("uploadStartBtn");if(el)el.textContent=count?(count+" image"+(count===1?"":"s")+" ready to upload"):"No images selected yet.";if(btn)btn.disabled=!count;if(list)list.innerHTML=intakeFiles.map((f,i)=>'<div class="selected-file"><span><b>'+esc(f.name)+'</b><small>'+Math.max(1,Math.round(f.size/1024))+' KB</small></span><button type="button" aria-label="Remove '+esc(f.name)+'" onclick="removeIntakeFile('+i+')">×</button></div>').join("")}
+function setUploadStatus(title, message, kind="ready") {
+  const el=document.getElementById("uploadStatus");
+  if(!el) return;
+  const icon=kind==="success"?"✓":kind==="error"?"!":"…";
+  el.innerHTML='<span>'+icon+'</span><div><b>'+esc(title)+'</b><small>'+esc(message)+'</small></div>';
+}
 async function upload(){
   const btn=document.querySelector("#uploadStartBtn");
   if(!intakeFiles.length)return alert("Add at least one report image");
