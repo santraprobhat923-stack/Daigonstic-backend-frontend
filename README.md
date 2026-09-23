@@ -464,3 +464,12 @@ The centre frontend asset version was bumped after the PDF verification UI chang
 Professional PDF body work is now committed on main. The intended flow remains:
 
 **Capture image → OCR → Pending Verification → Technician Verify/Edit credentials + report sections → Generate professional PDF body → Overlay on centre template → Centre Download → Optional Payment → Automatic WhatsApp Release/Delivery → Notifications.**
+
+
+## Android camera intake — 23 Sep 2026
+
+The New Report intake now has a dedicated **Take Photo** camera action using the device rear camera, plus **Choose from Gallery**. Camera and gallery images are collected into one intake list before submission, allowing staff to take multiple photos one after another or select multiple existing images and then start the existing OCR upload flow once.
+
+The camera input is reset after each capture so another photo can be taken immediately. Duplicate selections within the intake list are ignored, individual images can be removed before upload, and the Upload button remains disabled until at least one image is present. This is frontend-only and does not change the existing report/OCR API.
+
+The frontend asset version was bumped after this fix. Pull main and refresh Chrome before testing.
