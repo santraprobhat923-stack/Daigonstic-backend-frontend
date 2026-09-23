@@ -2,9 +2,7 @@ import hashlib,json,re,secrets
 from io import BytesIO
 from pathlib import Path
 from PIL import Image
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4
-from PyPDF2 import PdfReader,PdfWriter
+from .report_renderer import make_pdf_body_on_template
 try: import pytesseract
 except Exception: pytesseract=None
 from .config import STORAGE_DIR
@@ -63,51 +61,78 @@ def _first_field(readings,patterns):
     return min(clean or candidates,key=len)
 
 def _parse_tests(readings):
-    tests=[]; seen=set()
+    tests=[]; seen=set(); current_section="Examination Results"
+    section_patterns=[
+        re.compile(r"^(physical|chemical|microscopical|microscopic|macroscopic|hematological|haematological|biochemical|serological|urine|stool|blood|hormone|lipid|liver|kidney|renal|thyroid|coagulation|immunology|cytology|clinical pathology).{0,45}(?:examination|profile|panel|test|report)?$",re.I)
+    ]
+    skip=re.compile(r"^(department|report on|examination of|end of report|patient information|reference range|normal range)$",re.I)
+    qualitative=r"(?:positive|negative|normal|reactive|non-reactive|nil|none|absent|present(?:\s*\([+-]\))?|not seen|brownish|yellowish|yellow|greenish|black|soft|formed|semi[- ]formed|acidic|alkaline)"
     for text in readings:
         for raw in text.splitlines():
             line=_clean_line(raw)
             if not line: continue
-            line=_clean_line(re.sub(r"[|]+"," ",line))
+            line=re.sub(r"[|]+"," ",line).strip(" :-")
+            if skip.match(line): continue
+            normalized=re.sub(r"\s+"," ",line)
+            if any(p.match(normalized) for p in section_patterns) and not re.search(r"[:=]\s*",normalized):
+                current_section=normalized.strip()
+                continue
             patterns=[
-                rf"^(.{{2,70}}?)\s*[:=]\s*({NUMBER_RE}|positive|negative|normal|reactive|non-reactive)\s*({UNIT_RE})?\b",
-                rf"^(.{{2,70}}?)\s+({NUMBER_RE})\s+({UNIT_RE})\b",
+                rf"^(.{{2,70}}?)\s*[:=]\s*({NUMBER_RE}|{qualitative}|[A-Za-z][A-Za-z0-9 .()+/-]{{1,55}}?)\s*({UNIT_RE})?\s*$",
+                rf"^(.{{2,70}}?)\s+({NUMBER_RE})\s+({UNIT_RE})\s*$",
             ]
             m=None
             for pat in patterns:
-                m=re.match(pat,line,re.I)
+                m=re.match(pat,normalized,re.I)
                 if m: break
+            if not m:
+                # Handle report rows where the OCR loses the colon/delimiter.
+                m=re.match(rf"^(.{{2,55}}?)\s+({qualitative})\s*$",normalized,re.I)
             if m:
-                name=_clean_line(m.group(1)); value=m.group(2).replace(",","." ); unit=_clean_line(m.group(3) or "")
-                if _looks_like_test_name(name):
-                    key=(re.sub(r"[^a-z0-9]+","",name.lower()),value.lower(),unit.lower())
+                name=_clean_line(m.group(1)); value=_clean_line(m.group(2)); unit=_clean_line(m.group(3) or "") if len(m.groups())>=3 else ""
+                if _looks_like_test_name(name) and len(name.split())<=14:
+                    key=(re.sub(r"[^a-z0-9]+","",name.lower()),value.lower(),unit.lower(),current_section.lower())
                     if key not in seen:
-                        tests.append({"name":name,"value":value,"unit":unit}); seen.add(key)
-                    continue
-            m=re.search(rf"^(.{{2,70}}?)\s+({NUMBER_RE})(?:\s+(.{{1,30}}))?$",line,re.I)
-            if m:
-                name=_clean_line(m.group(1)); value=m.group(2).replace(",","." ); tail=_clean_line(m.group(3) or "")
-                um=re.match(rf"^({UNIT_RE})\b",tail,re.I)
-                unit=um.group(1) if um else ""
-                if _looks_like_test_name(name) and len(name.split())<=12:
-                    key=(re.sub(r"[^a-z0-9]+","",name.lower()),value.lower(),unit.lower())
-                    if key not in seen:
-                        tests.append({"name":name,"value":value,"unit":unit}); seen.add(key)
+                        tests.append({"name":name,"value":value,"unit":unit,"section":current_section}); seen.add(key)
     return tests
 
-def extract(path):
+def sha(data): return hashlib.sha256(data).hexdigest()
+def notify(db,cid,rid,kind,msg): db.add(Notification(centre_id=cid,report_id=rid,kind=kind,message=msg))
+def queue_wa(db,centre,report,kind,payload):
+    if not centre.whatsapp_enabled or not report.patient_phone: return
+    if db.query(WAJob).filter_by(report_id=report.id,kind=kind).first(): return
+    db.add(WAJob(centre_id=centre.id,report_id=report.id,kind=kind,payload=json.dumps(payload)))
+def make_pdf(centre,report,data,out):
+    # The uploaded centre PDF supplies branding/header/footer. Aarogyam renders
+    # only the professional diagnostic body and overlays it onto the template.
+    make_pdf_body_on_template(centre.template_path, data, out)
+
+def report_dict(r):
+    return {"id":r.id,"patient_name":r.patient_name,"patient_age":r.patient_age,"patient_sex":r.patient_sex,"patient_phone":r.patient_phone,"patient_code":r.patient_code,"status":r.status,"payment":r.payment,"charge":r.charge,"pdf_path":r.pdf_path,"verified_data":json.loads(r.verified_data or "{}"),"created_at":r.created_at.isoformat()}def extract(path):
     readings=_ocr_variants(path)
     combined="\n".join(readings)
     patient={
-        "name":_first_field(readings,[r"\bpatient\s*name\s*[:#-]\s*(.+?)$",r"\bname\s*[:#-]\s*(.+?)$"]),
-        "age":_first_field(readings,[r"\bage\s*[:#-]?\s*(\d{1,3})\b"]),
-        "sex":_first_field(readings,[r"\b(?:sex|gender)\s*[:#-]?\s*(male|female|m|f)\b"]),
-        "phone":_first_field(readings,[r"\b(?:phone|mobile|whatsapp)\s*[:#-]?\s*(\+?\d[\d -]{8,})"]),
-        "code":_first_field(readings,[r"\bpatient\s*(?:id|code)\s*[:#-]?\s*([A-Za-z0-9_-]{3,})\b"]),
+        "name":_first_field(readings,[r"\\bpatient\\s*name\\s*[:#-]\\s*(.+?)$",r"\\bname\\s*[:#-]\\s*(.+?)$"]),
+        "age":_first_field(readings,[r"\\bage\\s*[:#-]?\\s*(\\d{1,3})\\b"]),
+        "sex":_first_field(readings,[r"\\b(?:sex|gender)\\s*[:#-]?\\s*(male|female|m|f)\\b"]),
+        "phone":_first_field(readings,[r"\\b(?:phone|mobile|whatsapp)\\s*[:#-]?\\s*(\\+?\\d[\\d -]{8,})"]),
+        "code":_first_field(readings,[r"\\b(?:patient\\s*(?:id|code)|id\\s*number)\\s*[:#-]?\\s*([A-Za-z0-9_/-]{3,})\\b"]),
+        "uhid":_first_field(readings,[r"\\buhid\\s*[:#-]?\\s*([A-Za-z0-9_/-]{3,})\\b"]),
+        "referred_by":_first_field(readings,[r"\\b(?:referred\\s*by|ref\\.?\\s*by)\\s*[:#-]?\\s*(.+?)$"]),
+        "received_on":_first_field(readings,[r"\\breceived\\s*on\\s*[:#-]?\\s*([0-9A-Za-z ./-]{6,})$"]),
+        "reported_on":_first_field(readings,[r"\\breported\\s*on\\s*[:#-]?\\s*([0-9A-Za-z ./-]{6,})$"]),
     }
-    if re.search(r"\b(?:age|sex|gender|mobile|phone|patient\s*(?:id|code))\b",patient["name"],re.I):
+    if re.search(r"\\b(?:age|sex|gender|mobile|phone|patient\\s*(?:id|code)|uhid|referred|received|reported)\\b",patient["name"],re.I):
         patient["name"]=""
-    return combined,{"patient":patient,"tests":_parse_tests(readings)}
+    report={}
+    for text in readings:
+        for raw in text.splitlines():
+            line=_clean_line(raw)
+            m=re.match(r"^(?:department)\\s*[:#-]\\s*(.+)$",line,re.I)
+            if m and not report.get("department"): report["department"]=_clean_line(m.group(1))
+            m=re.match(r"^(?:report(?:\\s+title)?|examination)\\s*[:#-]\\s*(.+)$",line,re.I)
+            if m and not report.get("title"): report["title"]=_clean_line(m.group(1))
+    return combined,{"patient":patient,"tests":_parse_tests(readings),"report":report}
 
 def sha(data): return hashlib.sha256(data).hexdigest()
 def notify(db,cid,rid,kind,msg): db.add(Notification(centre_id=cid,report_id=rid,kind=kind,message=msg))
