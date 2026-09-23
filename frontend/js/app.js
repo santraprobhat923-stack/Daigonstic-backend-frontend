@@ -66,8 +66,18 @@ async function upload(){
   try{
     const j=await api("/api/reports/upload",{method:"POST",body:f});
     const dup=j.duplicate_count||0,added=j.uploaded_count||files.length;
-    setUploadStatus("Report job created.","Report #"+j.report.id+" is being read by OCR. You can upload more slips now.","success");
-    if(dup)setUploadStatus("Report job created.","Report #"+j.report.id+" · "+added+" new image"+(added===1?"":"s")+", "+dup+" duplicate"+(dup===1?"":"s")+" skipped.","success");
+    const createdReports=j.reports||[j.report];
+    const ids=createdReports.map(x=>"#"+x.id).join(", ");
+    setUploadStatus(
+      createdReports.length+" report job"+(createdReports.length===1?"":"s")+" created.",
+      ids+" "+(createdReports.length===1?"is":"are")+" being read by OCR in the background. You can upload more slips now.",
+      "success"
+    );
+    if(dup)setUploadStatus(
+      createdReports.length+" report job"+(createdReports.length===1?"":"s")+" created.",
+      ids+" · "+added+" new image"+(added===1?"":"s")+", "+dup+" duplicate"+(dup===1?"":"s")+" skipped.",
+      "success"
+    );
     setTimeout(()=>pending(),450);
     intakeFiles=[];
   }catch(e){
