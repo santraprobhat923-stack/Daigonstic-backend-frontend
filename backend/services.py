@@ -8,7 +8,7 @@ from .config import STORAGE_DIR
 from .models import Notification,WAJob
 
 UNIT_RE=r"(?:mg/dL|g/dL|gm/dL|ng/dL|ng/mL|pg/mL|µIU/mL|uIU/mL|mIU/L|IU/L|IU/mL|U/L|mmol/L|µmol/L|umol/L|mEq/L|mmHg|%|fL|pg|sec|/HPF|/hpf|cells/HPF|million/µL|million/uL|10\^\d+/µL|10\^\d+/uL|10\d+/µL|10\d+/uL|[A-Za-zµ]+/[A-Za-zµ]+)"
-NUMBER_RE=r"[<>]?\d+(?:[.,]\d+)?"
+NUMBER_RE=r"[<>]?\d+(?:[.,]\d+)?(?:\s*[-–]\s*\d+(?:[.,]\d+)?)?"
 
 def _clean_line(line):
     return re.sub(r"\s+"," ",line).strip(" :-|\t")
@@ -77,7 +77,7 @@ def _parse_tests(readings):
                 current_section=normalized.strip()
                 continue
             patterns=[
-                rf"^(.{{2,70}}?)\s*[:=]\s*({NUMBER_RE}|{qualitative})\s*({UNIT_RE})?\s*$",
+                rf"^(.{{2,70}}?)\s*[:=]\s*({NUMBER_RE}|{qualitative}|[A-Za-z0-9][A-Za-z0-9 .()+/%_-]{{1,70}}?)\s*({UNIT_RE})?\s*$",
                 rf"^(.{{2,70}}?)\s+({NUMBER_RE})\s+({UNIT_RE})\s*$",
             ]
             m=None
@@ -102,8 +102,10 @@ def _extract_report_meta(readings):
         for raw in text.splitlines():
             line=_clean_line(raw)
             m=re.match(r"^(?:department)\s*[:#-]\s*(.+)$",line,re.I)
+            if not m: m=re.match(r"^(DEPARTMENT\s+OF\s+.+)$",line,re.I)
             if m and not report.get("department"): report["department"]=_clean_line(m.group(1))
             m=re.match(r"^(?:report(?:\s+title)?|examination)\s*[:#-]\s*(.+)$",line,re.I)
+            if not m: m=re.match(r"^(REPORT\s+ON\s+.+)$",line,re.I)
             if m and not report.get("title"): report["title"]=_clean_line(m.group(1))
     return report
 
