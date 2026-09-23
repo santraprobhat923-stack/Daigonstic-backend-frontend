@@ -20,7 +20,7 @@ def _looks_like_test_name(name):
     blocked=("patient","patient id","patient code","name","age","sex","gender","mobile","phone",
              "whatsapp","address","sample","specimen","barcode","report","date","time","reference",
              "range","normal","result","unit","value","doctor","laboratory","diagnostic centre",
-             "diagnostic center","collection","received","registration")
+             "diagnostic center","collection","received","registration","referred","uhid","id number","associate","age / gender")
     return not any(re.search(r"\b"+re.escape(x)+r"\b",low) for x in blocked)
 
 def _ocr_variants(path):
