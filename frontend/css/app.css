@@ -149,3 +149,7 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}
 .credit-package{cursor:pointer;text-align:left}
 .credit-package strong{display:block;font-size:16px}
 .credit-package span{display:block;margin-top:5px;color:#667085}
+
+/* Camera/gallery intake controls */
+.capture-actions{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0 12px}.capture-actions button{min-height:46px}.capture-actions button:first-child{flex:1}.capture-actions button:not(:first-child){flex:1}.capture-actions+.muted{margin:4px 0 14px}
+@media(max-width:600px){.capture-actions{flex-direction:column}.capture-actions button{width:100%;min-height:50px}.upload-zone #uploadStartBtn{width:100%;margin-top:10px}}
