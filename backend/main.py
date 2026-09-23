@@ -195,29 +195,58 @@ def process_ocr(report_id, centre_id, paths):
 
 @app.post("/api/reports/upload")
 def upload(background_tasks:BackgroundTasks,files:list[UploadFile]=File(...),c=Depends(current),db:Session=Depends(get_db)):
-    paths=[]; hashes=[]; duplicates=0
+    duplicates=0
     existing_hashes=set()
     for raw in db.query(Report.image_hashes).filter_by(centre_id=c.id).all():
         try: existing_hashes.update(json.loads(raw[0] or "[]"))
         except Exception: pass
+
+    created=[]
+    seen=set()
     for f in files:
         data=awaitable_read(f)
         if not data: continue
         h=sha(data)
-        if h in hashes or h in existing_hashes:
+        if h in seen or h in existing_hashes:
             duplicates+=1
             continue
+        seen.add(h)
         p=STORAGE_DIR/f"centre_{c.id}"/"images"/(secrets.token_hex(8)+"_"+Path(f.filename or "image").name)
-        p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(data); paths.append(str(p)); hashes.append(h)
-    if not paths:
-        if duplicates: raise HTTPException(409,"This image was already uploaded. No new report was created.")
+        p.parent.mkdir(parents=True,exist_ok=True)
+        p.write_bytes(data)
+
+        # Every physical report image is its own independent Aarogyam job.
+        # This keeps bulk intake separate: one slip -> one OCR job -> one
+        # verification item -> one generated report/credit.
+        r=Report(
+            centre_id=c.id,
+            token=secrets.token_urlsafe(32),
+            verified_data=json.dumps({"patient":{},"tests":[],"report":{}}),
+            ocr_text="",
+            image_paths=json.dumps([str(p)]),
+            image_hashes=json.dumps([h]),
+            status="OCR_PROCESSING"
+        )
+        db.add(r)
+        db.flush()
+        created.append(r)
+
+    if not created:
+        if duplicates: raise HTTPException(409,"These images were already uploaded. No new report was created.")
         raise HTTPException(400,"No image received")
-    r=Report(centre_id=c.id,token=secrets.token_urlsafe(32),verified_data=json.dumps({"patient":{},"tests":[]}),
-             ocr_text="",image_paths=json.dumps(paths),image_hashes=json.dumps(hashes),status="OCR_PROCESSING")
-    db.add(r); db.commit(); db.refresh(r)
-    background_tasks.add_task(process_ocr,r.id,c.id,paths)
-    return {"report":report_dict(r),"extracted":{"patient":{},"tests":[],"report":{}},
-            "uploaded_count":len(paths),"duplicate_count":duplicates,"ocr_status":"PROCESSING"}
+
+    db.commit()
+    for r in created:
+        background_tasks.add_task(process_ocr,r.id,c.id,[json.loads(r.image_paths)[0]])
+
+    return {
+        "reports":[report_dict(r) for r in created],
+        "report":report_dict(created[0]),
+        "extracted":{"patient":{},"tests":[],"report":{}},
+        "uploaded_count":len(created),
+        "duplicate_count":duplicates,
+        "ocr_status":"PROCESSING"
+    }
 
 def awaitable_read(f):
     return f.file.read()
