@@ -49,7 +49,7 @@ def _draw_label_value(c, label, value, x, y, width):
 
 def _patient_block(c, patient, y):
     c.setFillGray(0.96)
-    c.roundRect(LEFT, y - 64, PAGE_W - LEFT - RIGHT, 64, 5, fill=1, stroke=0)
+    c.roundRect(LEFT, y - 78, PAGE_W - LEFT - RIGHT, 78, 5, fill=1, stroke=0)
     c.setFillGray(0)
     _text(c, "PATIENT INFORMATION", LEFT + 10, y - 15, "Helvetica-Bold", 8.5)
 
@@ -68,7 +68,7 @@ def _patient_block(c, patient, y):
         _draw_label_value(c, left_item[0], left_item[1], LEFT + 10, current, col - 5)
         _draw_label_value(c, right_item[0], right_item[1], LEFT + 10 + col, current, col - 5)
         current -= 13
-    return y - 72
+    return y - 86
 
 def _age_gender(patient):
     age, sex = patient.get("age", ""), patient.get("sex", "")
