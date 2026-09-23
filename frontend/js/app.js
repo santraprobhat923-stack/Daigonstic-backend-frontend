@@ -134,5 +134,5 @@ async function uploadTemplate(){const el=document.getElementById("tpl");if(!el.f
 window.addEventListener("error",e=>{showError(e.error||e.message||"Aarogyam could not start")});
 window.addEventListener("unhandledrejection",e=>{showError(e.reason||"Unexpected error")});
 function startAarogyam(){try{if(!app)throw Error("Application shell not found");boot().catch(showError)}catch(e){showError(e)}}
-if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",startAarogyam,{once:true});else setTimeout(startAarogyam,0);
-setTimeout(()=>{if(app&&app.innerText.includes("Loading workspace"))showError("The workspace did not start. Please refresh and sign in again.")},8000);
+startAarogyam();
+setTimeout(()=>{if(app&&app.innerText.includes("Loading workspace"))showError("The workspace did not start. The browser did not complete application startup. Please refresh once.")},5000);
