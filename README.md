@@ -466,6 +466,10 @@ Professional PDF body work is now committed on main. The intended flow remains:
 **Capture image → OCR → Pending Verification → Technician Verify/Edit credentials + report sections → Generate professional PDF body → Overlay on centre template → Centre Download → Optional Payment → Automatic WhatsApp Release/Delivery → Notifications.**
 
 
+## Bulk camera/gallery workflow — 23 Sep 2026
+
+Bulk intake is now a true per-slip workflow. Each captured or selected image creates its own independent report job: **one image → one OCR job → one Pending Verification item → one generated report/credit**. Multiple images can still be collected and submitted together. OCR jobs are started in the background independently, duplicate image hashes are skipped, and existing verification/PDF/payment/WhatsApp flow is unchanged.
+
 ## Android camera intake — 23 Sep 2026
 
 The New Report intake now has a dedicated **Take Photo** camera action using the device rear camera, plus **Choose from Gallery**. Camera and gallery images are collected into one intake list before submission, allowing staff to take multiple photos one after another or select multiple existing images and then start the existing OCR upload flow once.
