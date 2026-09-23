@@ -416,3 +416,51 @@ Then test the workflow in this order:
 Do not reset the database, recreate the centre, or reintroduce order/billing prerequisites merely because a workflow screen is incomplete. Diagnose the actual API/frontend state first. The intended workflow remains:
 
 **Capture image → OCR → Pending Verification → Technician Verify/Edit → Generate PDF → Centre Download → Optional Payment → Automatic WhatsApp Release/Delivery → Notifications.**
+
+
+## Professional diagnostic PDF body — 23 Sep 2026
+
+The PDF generation body has been redesigned to produce a professional diagnostic/laboratory report layout rather than a plain software data dump.
+
+### Template responsibility
+- The centre uploads a PDF template containing its own logo, header, branding, contact information, footer, doctor/signature and disclaimer.
+- Aarogyam does not replace the centre branding.
+- Aarogyam renders only the structured report body and overlays it onto the uploaded template.
+- The body is intentionally kept inside a safe content area so it does not normally overlap the centre header/footer.
+
+### Body structure
+The generated body now supports:
+- Professional patient-information block.
+- Name, age/gender, patient ID, UHID, referred by, received on, reported on and phone when available.
+- Department and report title.
+- Bold section headers such as Physical Examination, Chemical Examination and Microscopical Examination.
+- Consistently aligned test names, results and units.
+- Automatic wrapping for long test names/results.
+- Multiple report sections and variable diagnostic test types.
+- Technician-editable section, test name, result and unit fields before PDF generation.
+
+### OCR/verification support
+OCR now attempts to extract additional patient credentials such as UHID, referred by, received date and reported date, plus report department/title and section information. These remain draft values until technician verification.
+
+The technician verification screen now allows correction of all these fields and grouping of results into report sections. The final PDF is generated only from the verified data.
+
+### Current PDF renderer
+backend/report_renderer.py owns the professional body layout. backend/services.py passes the verified report data to the renderer. The uploaded centre template remains the visual branding layer.
+
+### Important testing requirement
+The renderer uses a generic A4 body coordinate area and therefore must be tested against real centre templates before production. Each centre's header/footer height and body-safe area can differ. A real Sunrise-style template should be uploaded and tested for:
+1. No overlap with header/logo.
+2. No overlap with footer/signature/disclaimer.
+3. Correct patient-information alignment.
+4. Correct section/result alignment.
+5. Long result wrapping.
+6. One-page and multi-page behaviour.
+
+### Frontend cache
+The centre frontend asset version was bumped after the PDF verification UI changes. After pulling the latest main branch, restart Uvicorn and refresh Chrome.
+
+## Latest implementation checkpoint — 23 Sep 2026
+
+Professional PDF body work is now committed on main. The intended flow remains:
+
+**Capture image → OCR → Pending Verification → Technician Verify/Edit credentials + report sections → Generate professional PDF body → Overlay on centre template → Centre Download → Optional Payment → Automatic WhatsApp Release/Delivery → Notifications.**
