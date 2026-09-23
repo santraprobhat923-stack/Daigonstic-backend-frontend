@@ -161,13 +161,15 @@ def process_ocr(report_id, centre_id, paths):
     try:
         r=db.get(Report,report_id)
         if not r or r.centre_id!=centre_id: return
-        merged={"patient":{},"tests":[]}; texts=[]; errors=[]
+        merged={"patient":{},"tests":[],"report":{}}; texts=[]; errors=[]
         for raw_path in paths:
             try:
                 t,d=extract(raw_path); texts.append(t)
                 for k,v in d["patient"].items():
                     if v and not merged["patient"].get(k): merged["patient"][k]=v
                 merged["tests"]+=d["tests"]
+                for k,v in d.get("report",{}).items():
+                    if v and not merged["report"].get(k): merged["report"][k]=v
             except Exception as e:
                 errors.append(f"OCR failed for {Path(raw_path).name}: {e}")
         r.verified_data=json.dumps(merged)
@@ -214,7 +216,7 @@ def upload(background_tasks:BackgroundTasks,files:list[UploadFile]=File(...),c=D
              ocr_text="",image_paths=json.dumps(paths),image_hashes=json.dumps(hashes),status="OCR_PROCESSING")
     db.add(r); db.commit(); db.refresh(r)
     background_tasks.add_task(process_ocr,r.id,c.id,paths)
-    return {"report":report_dict(r),"extracted":{"patient":{},"tests":[]},
+    return {"report":report_dict(r),"extracted":{"patient":{},"tests":[],"report":{}},
             "uploaded_count":len(paths),"duplicate_count":duplicates,"ocr_status":"PROCESSING"}
 
 def awaitable_read(f):
