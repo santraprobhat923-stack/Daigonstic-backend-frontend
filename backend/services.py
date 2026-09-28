@@ -126,18 +126,18 @@ def _patient_fields(readings):
     fields={k:[] for k in ("name","age","sex","phone","code","uhid","referred_by","received_on","reported_on")}
     patterns={
       "name":[
-        r"\\bpatient\\s*(?:name|nm)\\s*[:#=-]?\\s*(.+?)(?=\\s+(?:age|sex|gender|mobile|phone|patient\\s*(?:id|code)|uhid)\\b|$)",
-        r"^name\\s*[:#=-]?\\s*(.+?)(?=\\s+(?:age|sex|gender|mobile|phone|patient\\s*(?:id|code)|uhid)\\b|$)",
-        r"^patient\\s+([A-Za-z][A-Za-z .,'-]{1,80})$"
+        r"\bpatient\s*(?:name|nm)\s*[:#=-]?\s*(.+?)(?=\s+(?:age|sex|gender|mobile|phone|patient\s*(?:id|code)|uhid)\b|$)",
+        r"^name\s*[:#=-]?\s*(.+?)(?=\s+(?:age|sex|gender|mobile|phone|patient\s*(?:id|code)|uhid)\b|$)",
+        r"^patient\s+([A-Za-z][A-Za-z .,'-]{1,80})$"
       ],
-      "age":[r"\\bage\\s*[/,:#=-]?\\s*(\\d{1,3})(?:\\s*(?:years?|yrs?))?\\b"],
-      "sex":[r"\\b(?:sex|gender)\\s*[/,:#=-]?\\s*(male|female|m|f)\\b"],
-      "phone":[r"\\b(?:phone|mobile|mob|contact|whatsapp)\\s*(?:no\\.?|number)?\\s*[:#=-]?\\s*(\\+?\\d[\\d\\s().-]{8,})"],
-      "code":[r"\\b(?:patient\\s*(?:id|code|no\\.?)|sample\\s*(?:id|no\\.?|number)|specimen\\s*(?:id|no\\.?|number)|accession\\s*(?:id|no\\.?|number)|lab\\s*(?:id|no\\.?))\\s*[:#=-]?\\s*([A-Za-z0-9_./-]{2,})\\b"],
-      "uhid":[r"\\b(?:uhid|uhid\\s*no\\.?)\\s*[:#=-]?\\s*([A-Za-z0-9_./-]{2,})\\b"],
-      "referred_by":[r"\\b(?:referred\\s*by|ref\\.?\\s*by|referrer)\\s*[:#=-]?\\s*(.+?)$"],
-      "received_on":[r"\\b(?:received\\s*on|sample\\s*(?:received|collection)\\s*(?:date|on)?|collection\\s*date)\\s*[:#=-]?\\s*([0-9A-Za-z ./:-]{6,})$"],
-      "reported_on":[r"\\b(?:reported\\s*on|report\\s*date)\\s*[:#=-]?\\s*([0-9A-Za-z ./:-]{6,})$"]
+      "age":[r"\bage\s*[/,:#=-]?\s*(\d{1,3})(?:\s*(?:years?|yrs?))?\b"],
+      "sex":[r"\b(?:sex|gender)\s*[/,:#=-]?\s*(male|female|m|f)\b"],
+      "phone":[r"\b(?:phone|mobile|mob|contact|whatsapp)\s*(?:no\.?|number)?\s*[:#=-]?\s*(\+?\d[\d\s().-]{8,})"],
+      "code":[r"\b(?:patient\s*(?:id|code|no\.?)|sample\s*(?:id|no\.?|number)|specimen\s*(?:id|no\.?|number)|accession\s*(?:id|no\.?|number)|lab\s*(?:id|no\.?))\s*[:#=-]?\s*([A-Za-z0-9_./-]{2,})\b"],
+      "uhid":[r"\b(?:uhid|uhid\s*no\.?)\s*[:#=-]?\s*([A-Za-z0-9_./-]{2,})\b"],
+      "referred_by":[r"\b(?:referred\s*by|ref\.?\s*by|referrer)\s*[:#=-]?\s*(.+?)$"],
+      "received_on":[r"\b(?:received\s*on|sample\s*(?:received|collection)\s*(?:date|on)?|collection\s*date)\s*[:#=-]?\s*([0-9A-Za-z ./:-]{6,})$"],
+      "reported_on":[r"\b(?:reported\s*on|report\s*date)\s*[:#=-]?\s*([0-9A-Za-z ./:-]{6,})$"]
     }
     for text in readings:
         for raw in text.splitlines():
@@ -161,7 +161,7 @@ def _patient_fields(readings):
             counts[k]=counts.get(k,0)+1
         out[key]=max(vals,key=lambda v:(counts[re.sub(r"[^a-z0-9]+","",v.lower())],len(v)))
     for key in ("name","referred_by"):
-        out[key]=re.split(r"\\s+(?=(?:age|sex|gender|mobile|phone|uhid|sample\\s*(?:id|no)|patient\\s*(?:id|code))\\s*[:#=-]?)",out[key],maxsplit=1,flags=re.I)[0].strip(" :-")
+        out[key]=re.split(r"\s+(?=(?:age|sex|gender|mobile|phone|uhid|sample\s*(?:id|no)|patient\s*(?:id|code))\s*[:#=-]?)",out[key],maxsplit=1,flags=re.I)[0].strip(" :-")
     return out
 
 def _parse_tests(readings):
@@ -174,43 +174,43 @@ def _parse_tests(readings):
     """
     tests=[]
     current_section="Examination Results"
-    scalar=r"[<>]?\\d+(?:[.,]\\d+)?"
-    range_re=rf"[<>]?\\d+(?:[.,]\\d+)?(?:\\s*[-–]\\s*[<>]?\\d+(?:[.,]\\d+)?)?"
-    qualitative=(r"(?:positive|negative|normal|reactive|non-reactive|nil|none|absent|present(?:\\s*"
-                 r"\\([+-]\\))?|not seen|brownish|yellowish|yellow|greenish|black|soft|formed|"
+    scalar=r"[<>]?\d+(?:[.,]\d+)?"
+    range_re=rf"[<>]?\d+(?:[.,]\d+)?(?:\s*[-–]\s*[<>]?\d+(?:[.,]\d+)?)?"
+    qualitative=(r"(?:positive|negative|normal|reactive|non-reactive|nil|none|absent|present(?:\s*"
+                 r"\([+-]\))?|not seen|brownish|yellowish|yellow|greenish|black|soft|formed|"
                  r"semi[- ]formed|acidic|alkaline)")
     unit_re=UNIT_RE
     metadata=re.compile(
-        r"^(?:calibration(?:\\s+status)?|qc|quality\\s+control|reagent\\s+lot|reagent\\s+no|"
-        r"cuvette\\s+lot|cuvette\\s+no|serial\\s+(?:no|number)?|instrument|analyzer|"
-        r"machine\\s+(?:id|no|number)?|lot\\s+(?:no|number)?|control|operator|"
-        r"reference\\s+range|normal\\s+range|method|run\\s*(?:no|number)|run)$",re.I)
+        r"^(?:calibration(?:\s+status)?|qc|quality\s+control|reagent\s+lot|reagent\s+no|"
+        r"cuvette\s+lot|cuvette\s+no|serial\s+(?:no|number)?|instrument|analyzer|"
+        r"machine\s+(?:id|no|number)?|lot\s+(?:no|number)?|control|operator|"
+        r"reference\s+range|normal\s+range|method|run\s*(?:no|number)|run)$",re.I)
     headerish=re.compile(
         r"^(?:test|tests|investigation|investigations|examination|parameter|"
         r"result|results|value|unit|units|reference|range|remarks?)$",re.I)
     section_pattern=re.compile(
         r"^(?:physical|chemical|microscopical|microscopic|macroscopic|hematological|haematological|"
         r"biochemical|serological|urine|stool|blood|hormone|lipid|liver|kidney|renal|thyroid|"
-        r"coagulation|immunology|cytology|clinical pathology)(?:\\s+.{0,45})?$",re.I)
+        r"coagulation|immunology|cytology|clinical pathology)(?:\s+.{0,45})?$",re.I)
 
     def norm_unit(unit):
         unit=_clean_line(unit)
         if not unit: return ""
         u=unit.replace("µ","u")
-        u=re.sub(r"\\b(?:ma|mg|m9|mgl|mgdl|mg/dl|mg/dI|mg/d1)\\b","mg/dL",u,re.I)
-        u=re.sub(r"\\b(?:gml|gm/dl)\\b","g/dL",u,re.I)
-        u=re.sub(r"\\b(?:miu/l|miu\\/l)\\b","mIU/L",u,re.I)
-        u=re.sub(r"\\b(?:uiu/ml|uiU/ml)\\b","uIU/mL",u,re.I)
-        u=re.sub(r"\\s+"," ",u).strip()
+        u=re.sub(r"\b(?:ma|mg|m9|mgl|mgdl|mg/dl|mg/dI|mg/d1)\b","mg/dL",u,re.I)
+        u=re.sub(r"\b(?:gml|gm/dl)\b","g/dL",u,re.I)
+        u=re.sub(r"\b(?:miu/l|miu\/l)\b","mIU/L",u,re.I)
+        u=re.sub(r"\b(?:uiu/ml|uiU/ml)\b","uIU/mL",u,re.I)
+        u=re.sub(r"\s+"," ",u).strip()
         return u
 
     def normalize_name(name):
         name=_clean_line(name).strip(" :-|")
-        name=re.sub(r"\\s+"," ",name)
+        name=re.sub(r"\s+"," ",name)
         # Remove obvious OCR column debris from the end, but preserve
         # meaningful alphanumeric test names such as T3/T4.
-        name=re.sub(r"\\s+(?:[|Il1]{1,3}|[A-Za-z]\\s*[:;]?[<>]\\s*)$","",name)
-        name=re.sub(r"\\s+\\d{1,2}$","",name)
+        name=re.sub(r"\s+(?:[|Il1]{1,3}|[A-Za-z]\s*[:;]?[<>]\s*)$","",name)
+        name=re.sub(r"\s+\d{1,2}$","",name)
         return name.strip()
 
     def add_test(name,value,unit="",reference="",section=None):
@@ -223,9 +223,9 @@ def _parse_tests(readings):
         if metadata.match(name) or headerish.match(name):
             return False
         # A test name should not contain an entire result/unit column.
-        if re.search(unit_re,name,re.I) and re.search(r"\\d",name):
+        if re.search(unit_re,name,re.I) and re.search(r"\d",name):
             # Keep the portion before the first result-like token.
-            m=re.search(rf"\\s+{scalar}(?:\\s+|$)",name,re.I)
+            m=re.search(rf"\s+{scalar}(?:\s+|$)",name,re.I)
             if m:
                 name=name[:m.start()].strip()
         if not name or not _looks_like_test_name(name):
@@ -245,7 +245,7 @@ def _parse_tests(readings):
             return "", ""
         reference=""
         # Normalize a few OCR forms of inequality symbols before matching.
-        ref=re.search(r"([<>]\\s*\\d+(?:[.,]\\d+)?(?:\\s*[-–]\\s*[<>]?\\d+(?:[.,]\\d+)?)?)\\s*$",rest)
+        ref=re.search(r"([<>]\s*\d+(?:[.,]\d+)?(?:\s*[-–]\s*[<>]?\d+(?:[.,]\d+)?)?)\s*$",rest)
         if ref:
             reference=ref.group(1).replace(" ","")
             rest=rest[:ref.start()].strip(" |,:;-")
@@ -263,7 +263,7 @@ def _parse_tests(readings):
             line=_clean_line(raw)
             if not line: continue
             line=line.replace("¦","|")
-            line=re.sub(r"\\s+"," ",line).strip(" :-")
+            line=re.sub(r"\s+"," ",line).strip(" :-")
             if not line: continue
 
             if section_pattern.match(line) and not re.search(r"[:=]",line):
@@ -297,20 +297,20 @@ def _parse_tests(readings):
 
             # Standalone reference range.
             ref_only=re.match(
-                rf"^(?:reference(?:\\s+range)?|normal(?:\\s+range)?|ref\\.?)"
-                rf"\\s*[:=-]\\s*({range_re})$",line,re.I)
+                rf"^(?:reference(?:\s+range)?|normal(?:\s+range)?|ref\.?)"
+                rf"\s*[:=-]\s*({range_re})$",line,re.I)
             if ref_only and tests:
                 tests[-1]["reference_range"]=ref_only.group(1)
                 continue
 
             # Clean conventional rows first.
             patterns=[
-                rf"^(.{{2,80}}?)\\s*[:=]\\s*({scalar}|{qualitative})\\s+({unit_re})(?:\\s+({range_re}))?$",
-                rf"^(.{{2,80}}?)\\s+({scalar}|{qualitative})\\s+({unit_re})\\s+({range_re})$",
-                rf"^(.{{2,80}}?)\\s+({scalar}|{qualitative})\\s+({range_re})\\s+({unit_re})$",
-                rf"^(.{{2,80}}?)\\s*[:=]\\s*({scalar}|{qualitative})(?:\\s+({unit_re}))?$",
-                rf"^(.{{2,80}}?)\\s+({scalar}|{qualitative})\\s+({unit_re})$",
-                rf"^(.{{2,80}}?)\\s+({scalar}|{qualitative})$",
+                rf"^(.{{2,80}}?)\s*[:=]\s*({scalar}|{qualitative})\s+({unit_re})(?:\s+({range_re}))?$",
+                rf"^(.{{2,80}}?)\s+({scalar}|{qualitative})\s+({unit_re})\s+({range_re})$",
+                rf"^(.{{2,80}}?)\s+({scalar}|{qualitative})\s+({range_re})\s+({unit_re})$",
+                rf"^(.{{2,80}}?)\s*[:=]\s*({scalar}|{qualitative})(?:\s+({unit_re}))?$",
+                rf"^(.{{2,80}}?)\s+({scalar}|{qualitative})\s+({unit_re})$",
+                rf"^(.{{2,80}}?)\s+({scalar}|{qualitative})$",
             ]
             matched=False
             for idx,p in enumerate(patterns):
@@ -329,7 +329,7 @@ def _parse_tests(readings):
 
             # Recovery path: if OCR inserted garbage after a numeric result,
             # still recover TEST + RESULT + any recognizable unit/reference.
-            m=re.match(rf"^(.{{2,70}}?)\\s+({scalar}|{qualitative})\\s+(.+)$",line,re.I)
+            m=re.match(rf"^(.{{2,70}}?)\s+({scalar}|{qualitative})\s+(.+)$",line,re.I)
             if m:
                 name=m.group(1)
                 result=m.group(2)
