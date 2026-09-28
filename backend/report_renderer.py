@@ -86,13 +86,13 @@ def _draw_section(c, title, rows, y):
     _text(c, title.upper(), LEFT + 8, y - 12, "Helvetica-Bold", 8.5)
     y -= 29
     name_x = LEFT + 8
+    result_x = LEFT + 275
+    unit_x = PAGE_W - RIGHT - 112
+    ref_x = PAGE_W - RIGHT - 72
     _text(c, "TEST", name_x, y + 10, "Helvetica-Bold", 7.5)
     _text(c, "RESULT", result_x, y + 10, "Helvetica-Bold", 7.5)
     _text(c, "UNIT", unit_x, y + 10, "Helvetica-Bold", 7.5)
     _text(c, "REFERENCE", ref_x, y + 10, "Helvetica-Bold", 7.5)
-    result_x = LEFT + 275
-    unit_x = PAGE_W - RIGHT - 112
-    ref_x = PAGE_W - RIGHT - 72
     for row in rows:
         name = str(row.get("name", "")).strip()
         value = str(row.get("value", "")).strip()
