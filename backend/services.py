@@ -122,46 +122,55 @@ def _first_field(readings,patterns):
     return max(clean,key=lambda x:(len(x),len(x.split()))) if clean else max(candidates,key=len)
 
 def _patient_fields(readings):
-    """Extract common patient/header fields without assuming one slip layout."""
+    """Recover labelled patient/header fields, including values on the next OCR line."""
     fields={k:[] for k in ("name","age","sex","phone","code","uhid","referred_by","received_on","reported_on")}
     patterns={
-      "name":[
-        r"\bpatient\s*(?:name|nm)\s*[:#=-]?\s*(.+?)(?=\s+(?:age|sex|gender|mobile|phone|patient\s*(?:id|code)|uhid)\b|$)",
-        r"^name\s*[:#=-]?\s*(.+?)(?=\s+(?:age|sex|gender|mobile|phone|patient\s*(?:id|code)|uhid)\b|$)",
-        r"^patient\s+([A-Za-z][A-Za-z .,'-]{1,80})$"
-      ],
+      "name":[r"\bpatient\s*(?:name|nm)\s*[:#=-]?\s*(.+)$",r"^name\s*[:#=-]?\s*(.+)$",r"^patient\s+([A-Za-z][A-Za-z .,'-]{1,80})$"],
       "age":[r"\bage\s*[/,:#=-]?\s*(\d{1,3})(?:\s*(?:years?|yrs?))?\b"],
       "sex":[r"\b(?:sex|gender)\s*[/,:#=-]?\s*(male|female|m|f)\b"],
       "phone":[r"\b(?:phone|mobile|mob|contact|whatsapp)\s*(?:no\.?|number)?\s*[:#=-]?\s*(\+?\d[\d\s().-]{8,})"],
-      "code":[r"\b(?:patient\s*(?:id|code|no\.?)|sample\s*(?:id|no\.?|number)|specimen\s*(?:id|no\.?|number)|accession\s*(?:id|no\.?|number)|lab\s*(?:id|no\.?))\s*[:#=-]?\s*([A-Za-z0-9_./-]{2,})\b"],
+      "code":[r"\b(?:patient\s*(?:id|code|no\.?)|sample\s*(?:id|no\.?|number)|specimen\s*(?:id|no\.?|number)|accession\s*(?:id|no\.?|number)|lab\s*(?:id|no\.?)|id)\s*[:#=-]?\s*([A-Za-z0-9_./-]{2,})\b"],
       "uhid":[r"\b(?:uhid|uhid\s*no\.?)\s*[:#=-]?\s*([A-Za-z0-9_./-]{2,})\b"],
-      "referred_by":[r"\b(?:referred\s*by|ref\.?\s*by|referrer)\s*[:#=-]?\s*(.+?)$"],
+      "referred_by":[r"\b(?:referred\s*by|ref\.?\s*by|referrer)\s*[:#=-]?\s*(.+)$"],
       "received_on":[r"\b(?:received\s*on|sample\s*(?:received|collection)\s*(?:date|on)?|collection\s*date)\s*[:#=-]?\s*([0-9A-Za-z ./:-]{6,})$"],
       "reported_on":[r"\b(?:reported\s*on|report\s*date)\s*[:#=-]?\s*([0-9A-Za-z ./:-]{6,})$"]
     }
-    for text in readings:
-        for raw in text.splitlines():
+    lines=[]
+    for reading in readings:
+        for raw in reading.splitlines():
             line=_clean_line(raw)
-            if not line: continue
-            for key,ps in patterns.items():
-                for p in ps:
-                    m=re.search(p,line,re.I)
-                    if m:
-                        v=_clean_line(m.group(1))
-                        if v and len(v)<120:
-                            fields[key].append(v)
+            if line: lines.append(line)
+
+    for i,line in enumerate(lines):
+        for key,ps in patterns.items():
+            for p in ps:
+                m=re.search(p,line,re.I)
+                if m:
+                    v=_clean_line(m.group(1))
+                    if v and len(v)<120: fields[key].append(v)
+        # Handle a label occupying one OCR line and its value the next line.
+        if i+1<len(lines):
+            nxt=lines[i+1]
+            if re.fullmatch(r"(?:patient\s*)?(?:name|nm)\s*[:#=-]?",line,re.I) and re.fullmatch(r"[A-Za-z][A-Za-z .,'-]{1,80}",nxt):
+                fields["name"].append(nxt)
+            if re.fullmatch(r"(?:age)\s*[:#=-]?",line,re.I) and re.fullmatch(r"\d{1,3}",nxt):
+                fields["age"].append(nxt)
+            if re.fullmatch(r"(?:sex|gender)\s*[:#=-]?",line,re.I) and re.fullmatch(r"(?:male|female|m|f)",nxt,re.I):
+                fields["sex"].append(nxt)
+            if re.fullmatch(r"(?:mobile|mob|phone|contact|whatsapp)\s*(?:no\.?|number)?\s*[:#=-]?",line,re.I) and re.fullmatch(r"\+?\d[\d\s().-]{8,}",nxt):
+                fields["phone"].append(nxt)
+            if re.fullmatch(r"(?:patient\s*(?:id|code|no\.?)|sample\s*(?:id|no\.?|number)|specimen\s*(?:id|no\.?|number)|accession\s*(?:id|no\.?|number)|lab\s*(?:id|no\.?)|uhid)\s*[:#=-]?",line,re.I) and re.fullmatch(r"[A-Za-z0-9_./-]{2,}",nxt):
+                fields["code" if "uhid" not in line.lower() else "uhid"].append(nxt)
+            if re.fullmatch(r"(?:referred\s*by|ref\.?\s*by|referrer)\s*[:#=-]?",line,re.I) and re.fullmatch(r"[A-Za-z][A-Za-z .,'-]{1,80}",nxt):
+                fields["referred_by"].append(nxt)
+
     out={}
     for key,vals in fields.items():
-        if not vals:
-            out[key]=""
-            continue
+        if not vals: out[key]=""; continue
         counts={}
         for v in vals:
-            k=re.sub(r"[^a-z0-9]+","",v.lower())
-            counts[k]=counts.get(k,0)+1
+            k=re.sub(r"[^a-z0-9]+","",v.lower()); counts[k]=counts.get(k,0)+1
         out[key]=max(vals,key=lambda v:(counts[re.sub(r"[^a-z0-9]+","",v.lower())],len(v)))
-    for key in ("name","referred_by"):
-        out[key]=re.split(r"\s+(?=(?:age|sex|gender|mobile|phone|uhid|sample\s*(?:id|no)|patient\s*(?:id|code))\s*[:#=-]?)",out[key],maxsplit=1,flags=re.I)[0].strip(" :-")
     return out
 
 def _parse_tests(readings):
@@ -219,9 +228,14 @@ def _parse_tests(readings):
     def add_test(name,value,unit="",reference="",section=None):
         name=normalize_name(name)
         value=_clean_line(value)
+        # Remove result/column bleed from the test name. Keep compact names
+        # such as T3, T4 and B12 intact; only remove a separated numeric tail.
+        name=re.sub(r"\s+\d+(?:[.,]\d+)?(?:\s+.*)?$","",name).strip(" :-|")
         unit=norm_unit(unit)
         reference=_clean_line(reference)
         if not _looks_like_test_name(name) or len(name.split())>14:
+            return False
+        if len(name.split())>5:
             return False
         if metadata.match(name) or headerish.match(name):
             return False
