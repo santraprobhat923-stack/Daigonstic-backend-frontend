@@ -1,4 +1,5 @@
 import hashlib,json,re,secrets
+from difflib import SequenceMatcher
 from pathlib import Path
 from PIL import Image
 from .report_renderer import make_pdf_body_on_template
@@ -24,6 +25,12 @@ def _looks_like_test_name(name):
     return not any(re.search(r"\b"+re.escape(x)+r"\b",low) for x in blocked)
 
 def _ocr_variants(path):
+    """Run several OCR passes and preserve approximate line/column layout.
+
+    Raw OCR text is useful for labels, while image_to_data() gives word
+    positions that let us reconstruct thermal-printer rows without assuming
+    a particular analyzer or report template.
+    """
     if not pytesseract: return []
     img=Image.open(path).convert("L")
     w,h=img.size
@@ -31,13 +38,71 @@ def _ocr_variants(path):
         img=img.resize((w*2,h*2),Image.Resampling.LANCZOS)
     from PIL import ImageOps,ImageFilter
     base=ImageOps.autocontrast(img)
-    variants=[img,base,base.filter(ImageFilter.SHARPEN)]
+    variants=[
+        img,
+        base,
+        base.filter(ImageFilter.SHARPEN),
+    ]
     readings=[]
     for v in variants:
         for psm in (6,4,11):
-            try: t=pytesseract.image_to_string(v,config=f"--psm {psm}")
-            except Exception: t=""
-            if t and t.strip(): readings.append(t)
+            try:
+                raw=pytesseract.image_to_string(v,config=f"--psm {psm}")
+            except Exception:
+                raw=""
+            if raw and raw.strip():
+                readings.append(raw)
+
+            # Preserve positional information. Thermal slips often lose
+            # columns when converted to plain OCR text.
+            try:
+                data=pytesseract.image_to_data(
+                    v,
+                    config=f"--psm {psm}",
+                    output_type=pytesseract.Output.DICT,
+                )
+                rows={}
+                n=len(data.get("text",[]))
+                for i in range(n):
+                    word=(data["text"][i] or "").strip()
+                    try: conf=float(data["conf"][i])
+                    except Exception: conf=-1
+                    if not word or conf < 0:
+                        continue
+                    key=(
+                        data["block_num"][i],
+                        data["par_num"][i],
+                        data["line_num"][i],
+                    )
+                    rows.setdefault(key,[]).append((
+                        int(data["left"][i]),
+                        int(data["top"][i]),
+                        word,
+                    ))
+                ordered=[]
+                for words in rows.values():
+                    words.sort(key=lambda x:x[0])
+                    ordered.append(words)
+                ordered.sort(key=lambda row:(row[0][1],row[0][0]))
+                layout_lines=[]
+                for words in ordered:
+                    parts=[]
+                    prev_right=None
+                    for left,top,word in words:
+                        if prev_right is not None:
+                            gap=left-prev_right
+                            # A large horizontal gap is probably a column
+                            # boundary. Keep it visible for the parser.
+                            parts.append("|" if gap >= 45 else " ")
+                        parts.append(word)
+                        prev_right=left+max(8,len(word)*8)
+                    line="".join(parts).strip()
+                    if line:
+                        layout_lines.append(line)
+                if layout_lines:
+                    readings.append("\n".join(layout_lines))
+            except Exception:
+                pass
     return readings
 
 def _first_field(readings,patterns):
@@ -61,18 +126,18 @@ def _patient_fields(readings):
     fields={k:[] for k in ("name","age","sex","phone","code","uhid","referred_by","received_on","reported_on")}
     patterns={
       "name":[
-        r"\bpatient\s*(?:name|nm)\s*[:#=-]?\s*(.+?)$",
-        r"\bname\s*[:#=-]\s*(.+?)$",
-        r"^patient\s+([A-Za-z][A-Za-z .,'-]{1,80})$"
+        r"\\bpatient\\s*(?:name|nm)\\s*[:#=-]?\\s*(.+?)(?=\\s+(?:age|sex|gender|mobile|phone|patient\\s*(?:id|code)|uhid)\\b|$)",
+        r"^name\\s*[:#=-]?\\s*(.+?)(?=\\s+(?:age|sex|gender|mobile|phone|patient\\s*(?:id|code)|uhid)\\b|$)",
+        r"^patient\\s+([A-Za-z][A-Za-z .,'-]{1,80})$"
       ],
-      "age":[r"\bage\s*[/,:#=-]?\s*(\d{1,3})(?:\s*(?:years?|yrs?))?\b"],
-      "sex":[r"\b(?:sex|gender)\s*[/,:#=-]?\s*(male|female|m|f)\b"],
-      "phone":[r"\b(?:phone|mobile|mob|contact|whatsapp)\s*(?:no\.?|number)?\s*[:#=-]?\s*(\+?\d[\d\s().-]{8,})"],
-      "code":[r"\b(?:patient\s*(?:id|code|no\.?)|sample\s*(?:id|no\.?|number)|specimen\s*(?:id|no\.?|number)|accession\s*(?:id|no\.?|number)|lab\s*(?:id|no\.?))\s*[:#=-]?\s*([A-Za-z0-9_./-]{2,})\b"],
-      "uhid":[r"\b(?:uhid|uhid\s*no\.?)\s*[:#=-]?\s*([A-Za-z0-9_./-]{2,})\b"],
-      "referred_by":[r"\b(?:referred\s*by|ref\.?\s*by|referrer)\s*[:#=-]\s*(.+?)$"],
-      "received_on":[r"\b(?:received\s*on|sample\s*(?:received|collection)\s*(?:date|on)?|collection\s*date)\s*[:#=-]?\s*([0-9A-Za-z ./:-]{6,})$"],
-      "reported_on":[r"\b(?:reported\s*on|report\s*date)\s*[:#=-]?\s*([0-9A-Za-z ./:-]{6,})$"]
+      "age":[r"\\bage\\s*[/,:#=-]?\\s*(\\d{1,3})(?:\\s*(?:years?|yrs?))?\\b"],
+      "sex":[r"\\b(?:sex|gender)\\s*[/,:#=-]?\\s*(male|female|m|f)\\b"],
+      "phone":[r"\\b(?:phone|mobile|mob|contact|whatsapp)\\s*(?:no\\.?|number)?\\s*[:#=-]?\\s*(\\+?\\d[\\d\\s().-]{8,})"],
+      "code":[r"\\b(?:patient\\s*(?:id|code|no\\.?)|sample\\s*(?:id|no\\.?|number)|specimen\\s*(?:id|no\\.?|number)|accession\\s*(?:id|no\\.?|number)|lab\\s*(?:id|no\\.?))\\s*[:#=-]?\\s*([A-Za-z0-9_./-]{2,})\\b"],
+      "uhid":[r"\\b(?:uhid|uhid\\s*no\\.?)\\s*[:#=-]?\\s*([A-Za-z0-9_./-]{2,})\\b"],
+      "referred_by":[r"\\b(?:referred\\s*by|ref\\.?\\s*by|referrer)\\s*[:#=-]?\\s*(.+?)$"],
+      "received_on":[r"\\b(?:received\\s*on|sample\\s*(?:received|collection)\\s*(?:date|on)?|collection\\s*date)\\s*[:#=-]?\\s*([0-9A-Za-z ./:-]{6,})$"],
+      "reported_on":[r"\\b(?:reported\\s*on|report\\s*date)\\s*[:#=-]?\\s*([0-9A-Za-z ./:-]{6,})$"]
     }
     for text in readings:
         for raw in text.splitlines():
@@ -95,111 +160,203 @@ def _patient_fields(readings):
             k=re.sub(r"[^a-z0-9]+","",v.lower())
             counts[k]=counts.get(k,0)+1
         out[key]=max(vals,key=lambda v:(counts[re.sub(r"[^a-z0-9]+","",v.lower())],len(v)))
-    # Remove OCR spill-over where the value captured the next labelled field.
     for key in ("name","referred_by"):
-        out[key]=re.split(r"\s+(?=(?:age|sex|gender|mobile|phone|uhid|sample\s*(?:id|no)|patient\s*(?:id|code))\s*[:#=-])",out[key],maxsplit=1,flags=re.I)[0].strip(" :-")
+        out[key]=re.split(r"\\s+(?=(?:age|sex|gender|mobile|phone|uhid|sample\\s*(?:id|no)|patient\\s*(?:id|code))\\s*[:#=-]?)",out[key],maxsplit=1,flags=re.I)[0].strip(" :-")
     return out
 
-
 def _parse_tests(readings):
-    """Format-agnostic clinical result parser.
+    """Format-agnostic clinical result parser with layout recovery.
 
-    It recognizes common result layouts but never requires a particular
-    analyzer, department, or test menu. Medical dictionaries can improve
-    normalization, but they are not used as a whitelist.
+    The parser treats OCR as noisy evidence rather than clean columns. It
+    accepts positional rows, conventional one-line rows, and partial rows;
+    then normalizes units, removes instrument metadata, merges duplicates,
+    and keeps uncertain fields editable by the technician.
     """
     tests=[]
-    seen=set()
     current_section="Examination Results"
-    pending_ref=""
-    scalar=r"[<>]?\d+(?:[.,]\d+)?"
-    range_re=rf"[<>]?\d+(?:[.,]\d+)?(?:\s*[-–]\s*[<>]?\d+(?:[.,]\d+)?)?"
-    qualitative=(r"(?:positive|negative|normal|reactive|non-reactive|nil|none|absent|present(?:\s*"
-                 r"\([+-]\))?|not seen|brownish|yellowish|yellow|greenish|black|soft|formed|"
+    scalar=r"[<>]?\\d+(?:[.,]\\d+)?"
+    range_re=rf"[<>]?\\d+(?:[.,]\\d+)?(?:\\s*[-–]\\s*[<>]?\\d+(?:[.,]\\d+)?)?"
+    qualitative=(r"(?:positive|negative|normal|reactive|non-reactive|nil|none|absent|present(?:\\s*"
+                 r"\\([+-]\\))?|not seen|brownish|yellowish|yellow|greenish|black|soft|formed|"
                  r"semi[- ]formed|acidic|alkaline)")
     unit_re=UNIT_RE
     metadata=re.compile(
-        r"^(?:calibration(?:\s+status)?|qc|quality\s+control|reagent\s+lot|reagent\s+no|"
-        r"cuvette\s+lot|cuvette\s+no|serial\s+(?:no|number)?|instrument|analyzer|"
-        r"machine\s+(?:id|no|number)?|lot\s+(?:no|number)?|control|operator|"
-        r"reference\s+range|normal\s+range|method)\b",re.I)
+        r"^(?:calibration(?:\\s+status)?|qc|quality\\s+control|reagent\\s+lot|reagent\\s+no|"
+        r"cuvette\\s+lot|cuvette\\s+no|serial\\s+(?:no|number)?|instrument|analyzer|"
+        r"machine\\s+(?:id|no|number)?|lot\\s+(?:no|number)?|control|operator|"
+        r"reference\\s+range|normal\\s+range|method|run\\s*(?:no|number)|run)$",re.I)
     headerish=re.compile(
         r"^(?:test|tests|investigation|investigations|examination|parameter|"
         r"result|results|value|unit|units|reference|range|remarks?)$",re.I)
     section_pattern=re.compile(
         r"^(?:physical|chemical|microscopical|microscopic|macroscopic|hematological|haematological|"
         r"biochemical|serological|urine|stool|blood|hormone|lipid|liver|kidney|renal|thyroid|"
-        r"coagulation|immunology|cytology|clinical pathology)(?:\s+.{0,45})?$",re.I)
+        r"coagulation|immunology|cytology|clinical pathology)(?:\\s+.{0,45})?$",re.I)
+
+    def norm_unit(unit):
+        unit=_clean_line(unit)
+        if not unit: return ""
+        u=unit.replace("µ","u")
+        u=re.sub(r"\\b(?:ma|mg|m9|mgl|mgdl|mg/dl|mg/dI|mg/d1)\\b","mg/dL",u,re.I)
+        u=re.sub(r"\\b(?:gml|gm/dl)\\b","g/dL",u,re.I)
+        u=re.sub(r"\\b(?:miu/l|miu\\/l)\\b","mIU/L",u,re.I)
+        u=re.sub(r"\\b(?:uiu/ml|uiU/ml)\\b","uIU/mL",u,re.I)
+        u=re.sub(r"\\s+"," ",u).strip()
+        return u
+
+    def normalize_name(name):
+        name=_clean_line(name).strip(" :-|")
+        name=re.sub(r"\\s+"," ",name)
+        # Remove obvious OCR column debris from the end, but preserve
+        # meaningful alphanumeric test names such as T3/T4.
+        name=re.sub(r"\\s+(?:[|Il1]{1,3}|[A-Za-z]\\s*[:;]?[<>]\\s*)$","",name)
+        name=re.sub(r"\\s+\\d{1,2}$","",name)
+        return name.strip()
 
     def add_test(name,value,unit="",reference="",section=None):
-        name=_clean_line(name).strip(" :-|")
+        name=normalize_name(name)
         value=_clean_line(value)
-        unit=_clean_line(unit)
+        unit=norm_unit(unit)
         reference=_clean_line(reference)
         if not _looks_like_test_name(name) or len(name.split())>14:
             return False
-        low=name.lower()
         if metadata.match(name) or headerish.match(name):
             return False
-        # OCR can leave a trailing column marker such as "4" on the test name.
-        name=re.sub(r"\s+\d{1,2}$","",name).strip()
-        key=(re.sub(r"[^a-z0-9]+","",name.lower()),value.lower(),unit.lower())
-        if key in seen:
+        # A test name should not contain an entire result/unit column.
+        if re.search(unit_re,name,re.I) and re.search(r"\\d",name):
+            # Keep the portion before the first result-like token.
+            m=re.search(rf"\\s+{scalar}(?:\\s+|$)",name,re.I)
+            if m:
+                name=name[:m.start()].strip()
+        if not name or not _looks_like_test_name(name):
             return False
-        tests.append({"name":name,"value":value,"unit":unit,
-                      "reference_range":reference,
-                      "section":section or current_section})
-        seen.add(key)
+        tests.append({
+            "name":name,
+            "value":value,
+            "unit":unit,
+            "reference_range":reference,
+            "section":section or current_section
+        })
         return True
+
+    def parse_remainder(rest):
+        rest=_clean_line(rest).strip(" |,:;-")
+        if not rest:
+            return "", ""
+        reference=""
+        # Normalize a few OCR forms of inequality symbols before matching.
+        ref=re.search(r"([<>]\\s*\\d+(?:[.,]\\d+)?(?:\\s*[-–]\\s*[<>]?\\d+(?:[.,]\\d+)?)?)\\s*$",rest)
+        if ref:
+            reference=ref.group(1).replace(" ","")
+            rest=rest[:ref.start()].strip(" |,:;-")
+        unit=""
+        um=re.search(unit_re,rest,re.I)
+        if um:
+            unit=um.group(0)
+            rest=(rest[:um.start()]+" "+rest[um.end():]).strip(" |,:;-")
+        # Some OCR passes return junk after a valid unit. Ignore that junk;
+        # the clinical result itself remains usable for verification.
+        return norm_unit(unit),reference
 
     for text in readings:
         for raw in text.splitlines():
             line=_clean_line(raw)
             if not line: continue
-            line=re.sub(r"[|]+"," ",line)
-            line=re.sub(r"\s+"," ",line).strip(" :-")
+            line=line.replace("¦","|")
+            line=re.sub(r"\\s+"," ",line).strip(" :-")
             if not line: continue
 
             if section_pattern.match(line) and not re.search(r"[:=]",line):
                 current_section=line
-                pending_ref=""
                 continue
             if metadata.match(line):
                 continue
             if headerish.match(line):
                 continue
 
-            # A standalone reference-range line can belong to the preceding test.
-            ref_only=re.match(rf"^(?:reference(?:\s+range)?|normal(?:\s+range)?|ref\.?)\s*[:=-]\s*({range_re})$",line,re.I)
+            # Layout-aware row: TEST | RESULT | UNIT | REFERENCE
+            cols=[_clean_line(x) for x in line.split("|") if _clean_line(x)]
+            if len(cols)>=2:
+                result_idx=None
+                for i,c in enumerate(cols[1:],1):
+                    if re.fullmatch(rf"({scalar}|{qualitative})",c,re.I):
+                        result_idx=i
+                        break
+                if result_idx is not None:
+                    name=cols[0]
+                    result=cols[result_idx]
+                    unit=""
+                    reference=""
+                    for c in cols[result_idx+1:]:
+                        if not reference and re.fullmatch(range_re,c,re.I):
+                            reference=c
+                        elif not unit:
+                            unit=norm_unit(c)
+                    if add_test(name,result,unit,reference):
+                        continue
+
+            # Standalone reference range.
+            ref_only=re.match(
+                rf"^(?:reference(?:\\s+range)?|normal(?:\\s+range)?|ref\\.?)"
+                rf"\\s*[:=-]\\s*({range_re})$",line,re.I)
             if ref_only and tests:
                 tests[-1]["reference_range"]=ref_only.group(1)
                 continue
 
-            # TEST: RESULT UNIT REF, TEST RESULT UNIT REF, or TEST RESULT REF UNIT.
-            m=re.match(rf"^(.{{2,80}}?)\s*[:=]\s*({scalar}|{qualitative})\s+({unit_re})(?:\s+({range_re}))?$",line,re.I)
-            if not m:
-                m=re.match(rf"^(.{{2,80}}?)\s+({scalar}|{qualitative})\s+({unit_re})\s+({range_re})$",line,re.I)
-            if not m:
-                m=re.match(rf"^(.{{2,80}}?)\s+({scalar}|{qualitative})\s+({range_re})\s+({unit_re})$",line,re.I)
-            if m:
-                add_test(m.group(1),m.group(2),m.group(3),m.group(4) or "")
+            # Clean conventional rows first.
+            patterns=[
+                rf"^(.{{2,80}}?)\\s*[:=]\\s*({scalar}|{qualitative})\\s+({unit_re})(?:\\s+({range_re}))?$",
+                rf"^(.{{2,80}}?)\\s+({scalar}|{qualitative})\\s+({unit_re})\\s+({range_re})$",
+                rf"^(.{{2,80}}?)\\s+({scalar}|{qualitative})\\s+({range_re})\\s+({unit_re})$",
+                rf"^(.{{2,80}}?)\\s*[:=]\\s*({scalar}|{qualitative})(?:\\s+({unit_re}))?$",
+                rf"^(.{{2,80}}?)\\s+({scalar}|{qualitative})\\s+({unit_re})$",
+                rf"^(.{{2,80}}?)\\s+({scalar}|{qualitative})$",
+            ]
+            matched=False
+            for idx,p in enumerate(patterns):
+                m=re.match(p,line,re.I)
+                if not m: continue
+                if len(m.groups())==4:
+                    add_test(m.group(1),m.group(2),m.group(3),m.group(4) or "")
+                elif len(m.groups())==3:
+                    add_test(m.group(1),m.group(2),m.group(3) or "")
+                else:
+                    add_test(m.group(1),m.group(2))
+                matched=True
+                break
+            if matched:
                 continue
 
-            # TEST: RESULT UNIT or TEST RESULT UNIT.
-            m=re.match(rf"^(.{{2,80}}?)\s*[:=]\s*({scalar}|{qualitative})(?:\s+({unit_re}))?$",line,re.I)
-            if not m:
-                m=re.match(rf"^(.{{2,80}}?)\s+({scalar}|{qualitative})\s+({unit_re})$",line,re.I)
+            # Recovery path: if OCR inserted garbage after a numeric result,
+            # still recover TEST + RESULT + any recognizable unit/reference.
+            m=re.match(rf"^(.{{2,70}}?)\\s+({scalar}|{qualitative})\\s+(.+)$",line,re.I)
             if m:
-                add_test(m.group(1),m.group(2),m.group(3) or "")
-                continue
+                name=m.group(1)
+                result=m.group(2)
+                unit,reference=parse_remainder(m.group(3))
+                add_test(name,result,unit,reference)
 
-            # TEST RESULT with no unit, useful for qualitative/numeric reports.
-            m=re.match(rf"^(.{{2,80}}?)\s+({scalar}|{qualitative})$",line,re.I)
-            if m:
-                add_test(m.group(1),m.group(2))
-                continue
-
-    return tests
+    # Merge duplicate OCR variants. Prefer the row containing more reliable
+    # information (unit/reference) when names and values are close.
+    merged=[]
+    for t in tests:
+        tn=re.sub(r"[^a-z0-9]+","",t["name"].lower())
+        tv=re.sub(r"[^a-z0-9.+<>-]+","",t["value"].lower())
+        found=None
+        for existing in merged:
+            en=re.sub(r"[^a-z0-9]+","",existing["name"].lower())
+            ev=re.sub(r"[^a-z0-9.+<>-]+","",existing["value"].lower())
+            if tv==ev and SequenceMatcher(None,tn,en).ratio()>=0.82:
+                found=existing
+                break
+        if found:
+            if not found["unit"] and t["unit"]: found["unit"]=t["unit"]
+            if not found["reference_range"] and t["reference_range"]:
+                found["reference_range"]=t["reference_range"]
+            if len(t["name"])<len(found["name"]): found["name"]=t["name"]
+        else:
+            merged.append(t)
+    return merged
 
 def _extract_report_meta(readings):
     report={}
