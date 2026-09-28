@@ -17,6 +17,9 @@ def _clean_line(line):
 def _looks_like_test_name(name):
     name=_clean_line(name)
     if len(name)<2 or len(name)>80 or not re.search(r"[A-Za-z]",name): return False
+    # Reject OCR debris that can otherwise look like a short test name.
+    if "\\" in name or re.fullmatch(r"[IVXLCDM]+",name,re.I):
+        return False
     low=name.lower()
     blocked=("patient","patient id","patient code","name","age","sex","gender","mobile","phone",
              "whatsapp","address","sample","specimen","barcode","report","date","time","reference",
@@ -125,7 +128,7 @@ def _patient_fields(readings):
     """Recover labelled patient/header fields, including values on the next OCR line."""
     fields={k:[] for k in ("name","age","sex","phone","code","uhid","referred_by","received_on","reported_on")}
     patterns={
-      "name":[r"\bpatient\s*(?:name|nm)\s*[:#=-]?\s*(.+)$",r"^name\s*[:#=-]?\s*(.+)$",r"^patient\s+([A-Za-z][A-Za-z .,'-]{1,80})$"],
+      "name":[r"\bpatient\s*(?:name|nm)?\s*[:#=-]?\s*(.+)$",r"^name\s*[:#=-]?\s*(.+)$",r"^patient\s+([A-Za-z][A-Za-z .,'-]{1,80})$"],
       "age":[r"\bage\s*[/,:#=-]?\s*(\d{1,3})(?:\s*(?:years?|yrs?))?\b"],
       "sex":[r"\b(?:sex|gender)\s*[/,:#=-]?\s*(male|female|m|f)\b"],
       "phone":[r"\b(?:phone|mobile|mob|contact|whatsapp)\s*(?:no\.?|number)?\s*[:#=-]?\s*(\+?\d[\d\s().-]{8,})"],
@@ -221,7 +224,7 @@ def _parse_tests(readings):
         name=re.sub(r"\s+"," ",name)
         # Remove obvious OCR column debris from the end, but preserve
         # meaningful alphanumeric test names such as T3/T4.
-        name=re.sub(r"\s+(?:[|Il1]{1,3}|[A-Za-z]\s*[:;]?[<>]\s*)$","",name)
+        name=re.sub(r"\s+(?:[|IiLl1]{1,3}|[A-Za-z]\s*[:;]?[<>]\s*)$","",name)
         name=re.sub(r"\s+\d{1,2}$","",name)
         return name.strip()
 
@@ -362,7 +365,9 @@ def _parse_tests(readings):
         n=t["name"]; v=t["value"]; u=t["unit"]; r=t["reference_range"]
         if re.fullmatch(r"[<>]?\d+(?:[.,]\d+)?",v): q+=3
         if r and re.fullmatch(r"[<>]?\d+(?:[.,]\d+)?(?:\s*[-–]\s*[<>]?\d+(?:[.,]\d+)?)?",r): q+=2
-        if u in ("mg/dL","g/dL","mIU/L","uIU/mL"): q+=2
+        if u in ("mg/dL","g/dL","mIU/L","uIU/mL","U/L","IU/L","IU/mL","fL","pg","sec","mmHg","%","/HPF","/hpf"): q+=2
+        if u and u not in ("mg/dL","g/dL","mIU/L","uIU/mL","U/L","IU/L","IU/mL","fL","pg","sec","mmHg","%","/HPF","/hpf") and not re.search(r"/",u):
+            q-=1
         if re.search(r"\s+\d+(?:[.,]\d+)?(?:\s|$)",n): q-=5
         if re.search(r"[‘’“”]",n): q-=3
         if len(n.split())>8: q-=2
