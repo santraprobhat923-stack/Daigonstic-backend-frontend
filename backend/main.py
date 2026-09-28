@@ -264,6 +264,28 @@ def verify(rid:int,data:str=Form(...),c=Depends(current),db:Session=Depends(get_
     db.add(CreditTransaction(centre_id=c.id,type="REPORT_USAGE",credits=-1,amount_inr=0,reference=f"report_{r.id}"))
     r.verified_data=data; p=d.get("patient",{}); r.patient_name=p.get("name",""); r.patient_age=p.get("age",""); r.patient_sex=p.get("sex",""); r.patient_phone=p.get("phone",""); r.patient_code=p.get("code",""); r.pdf_path=str(out); r.status="GENERATED"; r.payment="PENDING" if c.whatsapp_enabled else "NOT_REQUIRED"
     notify(db,c.id,r.id,"REPORT_GENERATED",f"Report #{r.id} generated. Centre download is ready."); db.commit(); return report_dict(r)
+@app.delete("/api/reports/{rid}")
+def delete_report(rid:int,c=Depends(current),db:Session=Depends(get_db)):
+    r=db.get(Report,rid)
+    if not r or r.centre_id!=c.id: raise HTTPException(404,"Report not found")
+    if r.status in {"GENERATED","RELEASED"}: raise HTTPException(409,"Generated reports cannot be deleted from verification. Use the Reports workflow instead.")
+    for raw in [r.image_paths,r.pdf_path]:
+        paths=[]
+        if isinstance(raw,str) and raw:
+            if raw.startswith("["):
+                try: paths=json.loads(raw)
+                except Exception: paths=[]
+            else: paths=[raw]
+        for item in paths:
+            try:
+                p=Path(item)
+                if p.exists() and p.is_file(): p.unlink()
+            except Exception:
+                pass
+    db.delete(r)
+    db.commit()
+    return {"ok":True,"message":f"Report #{rid} deleted successfully."}
+
 @app.get("/api/reports")
 def reports(search:str="",c=Depends(current),db:Session=Depends(get_db)):
     q=db.query(Report).filter_by(centre_id=c.id)
