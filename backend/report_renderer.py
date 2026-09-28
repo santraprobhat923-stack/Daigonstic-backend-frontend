@@ -86,21 +86,30 @@ def _draw_section(c, title, rows, y):
     _text(c, title.upper(), LEFT + 8, y - 12, "Helvetica-Bold", 8.5)
     y -= 29
     name_x = LEFT + 8
-    result_x = LEFT + 290
-    unit_x = PAGE_W - RIGHT - 72
+    _text(c, "TEST", name_x, y + 10, "Helvetica-Bold", 7.5)
+    _text(c, "RESULT", result_x, y + 10, "Helvetica-Bold", 7.5)
+    _text(c, "UNIT", unit_x, y + 10, "Helvetica-Bold", 7.5)
+    _text(c, "REFERENCE", ref_x, y + 10, "Helvetica-Bold", 7.5)
+    result_x = LEFT + 275
+    unit_x = PAGE_W - RIGHT - 112
+    ref_x = PAGE_W - RIGHT - 72
     for row in rows:
         name = str(row.get("name", "")).strip()
         value = str(row.get("value", "")).strip()
         unit = str(row.get("unit", "")).strip()
+        reference = str(row.get("reference_range", "")).strip()
         name_lines = _wrap(c, name, result_x - name_x - 15, "Helvetica", 9)
         value_lines = _wrap(c, value, unit_x - result_x - 12, "Helvetica", 9)
-        count = max(len(name_lines), len(value_lines), 1)
+        reference_lines = _wrap(c, reference, PAGE_W - RIGHT - ref_x, "Helvetica", 8)
+        count = max(len(name_lines), len(value_lines), len(reference_lines), 1)
         for i in range(count):
             yy = y - i * 11
             _text(c, name_lines[i] if i < len(name_lines) else "", name_x, yy, "Helvetica", 9)
             _text(c, value_lines[i] if i < len(value_lines) else "", result_x, yy, "Helvetica", 9)
             if i == 0 and unit:
                 _text(c, unit, unit_x, yy, "Helvetica", 8)
+            if i == 0 and reference:
+                _text(c, reference_lines[0], ref_x, yy, "Helvetica", 8)
         y -= max(18, count * 11 + 7)
         if y < BODY_BOTTOM + 28:
             c.showPage()
