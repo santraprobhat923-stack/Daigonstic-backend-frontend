@@ -196,13 +196,16 @@ def _parse_tests(readings):
     def norm_unit(unit):
         unit=_clean_line(unit)
         if not unit: return ""
-        u=unit.replace("µ","u")
-        u=re.sub(r"\b(?:ma|mg|m9|mgl|mgdl|mg/dl|mg/dI|mg/d1)\b","mg/dL",u,re.I)
-        u=re.sub(r"\b(?:gml|gm/dl)\b","g/dL",u,re.I)
-        u=re.sub(r"\b(?:miu/l|miu\/l)\b","mIU/L",u,re.I)
-        u=re.sub(r"\b(?:uiu/ml|uiU/ml)\b","uIU/mL",u,re.I)
-        u=re.sub(r"\s+"," ",u).strip()
-        return u
+        u=unit.replace("µ","u").strip()
+        if re.search(r"mg\s*/\s*d[lI1]|\bmgd[lI1]\b|\bma\s*/\s*dl\b|\bmg\b",u,re.I):
+            return "mg/dL"
+        if re.search(r"g\s*/\s*d[lI1]|\bgm\s*/\s*dl\b|\bgml\b",u,re.I):
+            return "g/dL"
+        if re.search(r"m?iu\s*/\s*l",u,re.I):
+            return "mIU/L"
+        if re.search(r"uiu\s*/\s*ml",u,re.I):
+            return "uIU/mL"
+        return re.sub(r"\s+"," ",u).strip()
 
     def normalize_name(name):
         name=_clean_line(name).strip(" :-|")
@@ -229,6 +232,8 @@ def _parse_tests(readings):
             if m:
                 name=name[:m.start()].strip()
         if not name or not _looks_like_test_name(name):
+            return False
+        if re.fullmatch(r"[<>]\s*\d+(?:[.,]\d+)?",value) and not unit and not reference:
             return False
         tests.append({
             "name":name,
@@ -336,24 +341,36 @@ def _parse_tests(readings):
                 unit,reference=parse_remainder(m.group(3))
                 add_test(name,result,unit,reference)
 
-    # Merge duplicate OCR variants. Prefer the row containing more reliable
-    # information (unit/reference) when names and values are close.
+    # Merge OCR variants by normalized test name. Prefer the candidate
+    # with a clean numeric result, recognizable unit and reference range.
+    def quality(t):
+        q=0
+        n=t["name"]; v=t["value"]; u=t["unit"]; r=t["reference_range"]
+        if re.fullmatch(r"[<>]?\d+(?:[.,]\d+)?",v): q+=3
+        if r and re.fullmatch(r"[<>]?\d+(?:[.,]\d+)?(?:\s*[-–]\s*[<>]?\d+(?:[.,]\d+)?)?",r): q+=2
+        if u in ("mg/dL","g/dL","mIU/L","uIU/mL"): q+=2
+        if re.search(r"\s+\d+(?:[.,]\d+)?(?:\s|$)",n): q-=5
+        if re.search(r"[‘’“”]",n): q-=3
+        if len(n.split())>8: q-=2
+        return q
     merged=[]
     for t in tests:
         tn=re.sub(r"[^a-z0-9]+","",t["name"].lower())
-        tv=re.sub(r"[^a-z0-9.+<>-]+","",t["value"].lower())
         found=None
         for existing in merged:
             en=re.sub(r"[^a-z0-9]+","",existing["name"].lower())
-            ev=re.sub(r"[^a-z0-9.+<>-]+","",existing["value"].lower())
-            if tv==ev and SequenceMatcher(None,tn,en).ratio()>=0.82:
+            if tn==en or (len(tn)>=4 and SequenceMatcher(None,tn,en).ratio()>=0.88):
                 found=existing
                 break
         if found:
-            if not found["unit"] and t["unit"]: found["unit"]=t["unit"]
-            if not found["reference_range"] and t["reference_range"]:
-                found["reference_range"]=t["reference_range"]
-            if len(t["name"])<len(found["name"]): found["name"]=t["name"]
+            if quality(t)>quality(found):
+                winner,other=t,found
+            else:
+                winner,other=found,t
+            if not winner["unit"] and other["unit"]: winner["unit"]=other["unit"]
+            if not winner["reference_range"] and other["reference_range"]:
+                winner["reference_range"]=other["reference_range"]
+            found.update(winner)
         else:
             merged.append(t)
     return merged
