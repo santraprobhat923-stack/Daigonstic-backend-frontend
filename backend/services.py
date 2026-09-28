@@ -57,17 +57,22 @@ def _first_field(readings,patterns):
     return max(clean,key=lambda x:(len(x),len(x.split()))) if clean else max(candidates,key=len)
 
 def _patient_fields(readings):
-    fields={"name":[],"age":[],"sex":[],"phone":[],"code":[],"uhid":[],"referred_by":[],"received_on":[],"reported_on":[]}
+    """Extract common patient/header fields without assuming one slip layout."""
+    fields={k:[] for k in ("name","age","sex","phone","code","uhid","referred_by","received_on","reported_on")}
     patterns={
-      "name":[r"\bpatient\s*(?:name|nm)\s*[:#-]\s*(.+?)$",r"\bname\s*[:#-]\s*(.+?)$"],
-      "age":[r"\bage\s*[/,:#-]?\s*(\d{1,3})(?:\s*(?:years?|yrs?))?\b"],
-      "sex":[r"\b(?:sex|gender)\s*[/,:#-]?\s*(male|female|m|f)\b"],
-      "phone":[r"\b(?:phone|mobile|mob|contact|whatsapp)\s*(?:no\.?|number)?\s*[:#-]?\s*(\+?\d[\d\s().-]{8,})"],
-      "code":[r"\b(?:patient\s*(?:id|code)|patient\s*no\.?|id\s*number)\s*[:#-]?\s*([A-Za-z0-9_/-]{3,})\b"],
-      "uhid":[r"\b(?:uhid|uhid\s*no\.?)\s*[:#-]?\s*([A-Za-z0-9_/-]{3,})\b"],
-      "referred_by":[r"\b(?:referred\s*by|ref\.?\s*by|referrer)\s*[:#-]\s*(.+?)$"],
-      "received_on":[r"\b(?:received\s*on|sample\s*(?:received|collection)\s*date)\s*[:#-]?\s*([0-9A-Za-z ./:-]{6,})$"],
-      "reported_on":[r"\b(?:reported\s*on|report\s*date)\s*[:#-]?\s*([0-9A-Za-z ./:-]{6,})$"]
+      "name":[
+        r"\bpatient\s*(?:name|nm)\s*[:#=-]?\s*(.+?)$",
+        r"\bname\s*[:#=-]\s*(.+?)$",
+        r"^patient\s+([A-Za-z][A-Za-z .,'-]{1,80})$"
+      ],
+      "age":[r"\bage\s*[/,:#=-]?\s*(\d{1,3})(?:\s*(?:years?|yrs?))?\b"],
+      "sex":[r"\b(?:sex|gender)\s*[/,:#=-]?\s*(male|female|m|f)\b"],
+      "phone":[r"\b(?:phone|mobile|mob|contact|whatsapp)\s*(?:no\.?|number)?\s*[:#=-]?\s*(\+?\d[\d\s().-]{8,})"],
+      "code":[r"\b(?:patient\s*(?:id|code|no\.?)|sample\s*(?:id|no\.?|number)|specimen\s*(?:id|no\.?|number)|accession\s*(?:id|no\.?|number)|lab\s*(?:id|no\.?))\s*[:#=-]?\s*([A-Za-z0-9_./-]{2,})\b"],
+      "uhid":[r"\b(?:uhid|uhid\s*no\.?)\s*[:#=-]?\s*([A-Za-z0-9_./-]{2,})\b"],
+      "referred_by":[r"\b(?:referred\s*by|ref\.?\s*by|referrer)\s*[:#=-]\s*(.+?)$"],
+      "received_on":[r"\b(?:received\s*on|sample\s*(?:received|collection)\s*(?:date|on)?|collection\s*date)\s*[:#=-]?\s*([0-9A-Za-z ./:-]{6,})$"],
+      "reported_on":[r"\b(?:reported\s*on|report\s*date)\s*[:#=-]?\s*([0-9A-Za-z ./:-]{6,})$"]
     }
     for text in readings:
         for raw in text.splitlines():
@@ -78,57 +83,122 @@ def _patient_fields(readings):
                     m=re.search(p,line,re.I)
                     if m:
                         v=_clean_line(m.group(1))
-                        if v and len(v)<120: fields[key].append(v)
+                        if v and len(v)<120:
+                            fields[key].append(v)
     out={}
     for key,vals in fields.items():
-        if not vals: out[key]=""; continue
-        norm={}
+        if not vals:
+            out[key]=""
+            continue
+        counts={}
         for v in vals:
             k=re.sub(r"[^a-z0-9]+","",v.lower())
-            norm[k]=norm.get(k,0)+1
-        out[key]=max(vals,key=lambda v:(norm[re.sub(r"[^a-z0-9]+","",v.lower())],len(v)))
-    if out["name"]:
-        out["name"]=re.sub(r"\s*(?:age|sex|gender|mobile|phone|uhid|patient\s*(?:id|code))\s*[:#-].*$","",out["name"],flags=re.I).strip(" :-")
+            counts[k]=counts.get(k,0)+1
+        out[key]=max(vals,key=lambda v:(counts[re.sub(r"[^a-z0-9]+","",v.lower())],len(v)))
+    # Remove OCR spill-over where the value captured the next labelled field.
+    for key in ("name","referred_by"):
+        out[key]=re.split(r"\s+(?=(?:age|sex|gender|mobile|phone|uhid|sample\s*(?:id|no)|patient\s*(?:id|code))\s*[:#=-])",out[key],maxsplit=1,flags=re.I)[0].strip(" :-")
     return out
 
+
 def _parse_tests(readings):
-    tests=[]; seen=set(); current_section="Examination Results"
+    """Format-agnostic clinical result parser.
+
+    It recognizes common result layouts but never requires a particular
+    analyzer, department, or test menu. Medical dictionaries can improve
+    normalization, but they are not used as a whitelist.
+    """
+    tests=[]
+    seen=set()
+    current_section="Examination Results"
+    pending_ref=""
+    scalar=r"[<>]?\d+(?:[.,]\d+)?"
+    range_re=rf"[<>]?\d+(?:[.,]\d+)?(?:\s*[-–]\s*[<>]?\d+(?:[.,]\d+)?)?"
+    qualitative=(r"(?:positive|negative|normal|reactive|non-reactive|nil|none|absent|present(?:\s*"
+                 r"\([+-]\))?|not seen|brownish|yellowish|yellow|greenish|black|soft|formed|"
+                 r"semi[- ]formed|acidic|alkaline)")
+    unit_re=UNIT_RE
+    metadata=re.compile(
+        r"^(?:calibration(?:\s+status)?|qc|quality\s+control|reagent\s+lot|reagent\s+no|"
+        r"cuvette\s+lot|cuvette\s+no|serial\s+(?:no|number)?|instrument|analyzer|"
+        r"machine\s+(?:id|no|number)?|lot\s+(?:no|number)?|control|operator|"
+        r"reference\s+range|normal\s+range|method)\b",re.I)
+    headerish=re.compile(
+        r"^(?:test|tests|investigation|investigations|examination|parameter|"
+        r"result|results|value|unit|units|reference|range|remarks?)$",re.I)
     section_pattern=re.compile(
-        r"^(physical|chemical|microscopical|microscopic|macroscopic|hematological|haematological|"
+        r"^(?:physical|chemical|microscopical|microscopic|macroscopic|hematological|haematological|"
         r"biochemical|serological|urine|stool|blood|hormone|lipid|liver|kidney|renal|thyroid|"
         r"coagulation|immunology|cytology|clinical pathology)(?:\s+.{0,45})?$",re.I)
-    skip=re.compile(r"^(department|report on|examination of|end of report|patient information|"
-                    r"reference range|normal range)$",re.I)
-    qualitative=(r"(?:positive|negative|normal|reactive|non-reactive|nil|none|absent|present(?:\s*\([+-]\))?|"
-                 r"not seen|brownish|yellowish|yellow|greenish|black|soft|formed|semi[- ]formed|acidic|alkaline)")
+
+    def add_test(name,value,unit="",reference="",section=None):
+        name=_clean_line(name).strip(" :-|")
+        value=_clean_line(value)
+        unit=_clean_line(unit)
+        reference=_clean_line(reference)
+        if not _looks_like_test_name(name) or len(name.split())>14:
+            return False
+        low=name.lower()
+        if metadata.match(name) or headerish.match(name):
+            return False
+        # OCR can leave a trailing column marker such as "4" on the test name.
+        name=re.sub(r"\s+\d{1,2}$","",name).strip()
+        key=(re.sub(r"[^a-z0-9]+","",name.lower()),value.lower(),unit.lower())
+        if key in seen:
+            return False
+        tests.append({"name":name,"value":value,"unit":unit,
+                      "reference_range":reference,
+                      "section":section or current_section})
+        seen.add(key)
+        return True
+
     for text in readings:
         for raw in text.splitlines():
             line=_clean_line(raw)
             if not line: continue
-            line=re.sub(r"[|]+"," ",line).strip(" :-")
-            normalized=re.sub(r"\s+"," ",line)
-            if skip.match(normalized): continue
-            if section_pattern.match(normalized) and not re.search(r"[:=]\s*",normalized):
-                current_section=normalized.strip()
+            line=re.sub(r"[|]+"," ",line)
+            line=re.sub(r"\s+"," ",line).strip(" :-")
+            if not line: continue
+
+            if section_pattern.match(line) and not re.search(r"[:=]",line):
+                current_section=line
+                pending_ref=""
                 continue
-            patterns=[
-                rf"^(.{{2,70}}?)\s*[:=]\s*({NUMBER_RE}|{qualitative}|[A-Za-z0-9][A-Za-z0-9 .()+/%_-]{{1,70}}?)\s*({UNIT_RE})?\s*$",
-                rf"^(.{{2,70}}?)\s+({NUMBER_RE})\s+({UNIT_RE})\s*$",
-            ]
-            m=None
-            for pat in patterns:
-                m=re.match(pat,normalized,re.I)
-                if m: break
+            if metadata.match(line):
+                continue
+            if headerish.match(line):
+                continue
+
+            # A standalone reference-range line can belong to the preceding test.
+            ref_only=re.match(rf"^(?:reference(?:\s+range)?|normal(?:\s+range)?|ref\.?)\s*[:=-]\s*({range_re})$",line,re.I)
+            if ref_only and tests:
+                tests[-1]["reference_range"]=ref_only.group(1)
+                continue
+
+            # TEST: RESULT UNIT REF, TEST RESULT UNIT REF, or TEST RESULT REF UNIT.
+            m=re.match(rf"^(.{{2,80}}?)\s*[:=]\s*({scalar}|{qualitative})\s+({unit_re})(?:\s+({range_re}))?$",line,re.I)
             if not m:
-                m=re.match(rf"^(.{{2,55}}?)\s+({qualitative})\s*$",normalized,re.I)
+                m=re.match(rf"^(.{{2,80}}?)\s+({scalar}|{qualitative})\s+({unit_re})\s+({range_re})$",line,re.I)
+            if not m:
+                m=re.match(rf"^(.{{2,80}}?)\s+({scalar}|{qualitative})\s+({range_re})\s+({unit_re})$",line,re.I)
             if m:
-                name=_clean_line(m.group(1)); value=_clean_line(m.group(2))
-                unit=_clean_line(m.group(3) or "") if len(m.groups())>=3 else ""
-                if _looks_like_test_name(name) and len(name.split())<=14:
-                    key=(re.sub(r"[^a-z0-9]+","",name.lower()),value.lower(),unit.lower(),current_section.lower())
-                    if key not in seen:
-                        tests.append({"name":name,"value":value,"unit":unit,"section":current_section})
-                        seen.add(key)
+                add_test(m.group(1),m.group(2),m.group(3),m.group(4) or "")
+                continue
+
+            # TEST: RESULT UNIT or TEST RESULT UNIT.
+            m=re.match(rf"^(.{{2,80}}?)\s*[:=]\s*({scalar}|{qualitative})(?:\s+({unit_re}))?$",line,re.I)
+            if not m:
+                m=re.match(rf"^(.{{2,80}}?)\s+({scalar}|{qualitative})\s+({unit_re})$",line,re.I)
+            if m:
+                add_test(m.group(1),m.group(2),m.group(3) or "")
+                continue
+
+            # TEST RESULT with no unit, useful for qualitative/numeric reports.
+            m=re.match(rf"^(.{{2,80}}?)\s+({scalar}|{qualitative})$",line,re.I)
+            if m:
+                add_test(m.group(1),m.group(2))
+                continue
+
     return tests
 
 def _extract_report_meta(readings):
