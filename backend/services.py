@@ -99,8 +99,8 @@ def _parse_tests(readings):
         r"coagulation|immunology|cytology|clinical pathology)(?:\s+.{0,45})?$",re.I)
     skip=re.compile(r"^(department|report on|examination of|end of report|patient information|"
                     r"reference range|normal range)$",re.I)
-    qualitative=r"(?:positive|negative|normal|reactive|non-reactive|nil|none|absent|present(?:\s*\([+-]\))?|"
-                 r"not seen|brownish|yellowish|yellow|greenish|black|soft|formed|semi[- ]formed|acidic|alkaline)"
+    qualitative=(r"(?:positive|negative|normal|reactive|non-reactive|nil|none|absent|present(?:\s*\([+-]\))?|"
+                 r"not seen|brownish|yellowish|yellow|greenish|black|soft|formed|semi[- ]formed|acidic|alkaline)")
     for text in readings:
         for raw in text.splitlines():
             line=_clean_line(raw)
