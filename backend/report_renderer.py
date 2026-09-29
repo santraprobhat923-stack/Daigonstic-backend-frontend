@@ -140,89 +140,158 @@ def _draw_label_value(c, label, value, x, y, width, layout):
         _text(c, line, value_x, y, value_font, size, text_color)
     return y
 
-def _patient_block(c, patient, y, layout):
-    left, right, _, _ = _metrics(layout)
+def _draw_patient_block(c, patient, y, layout):
+    left, right, _, bottom = _metrics(layout)
     cfg = layout["patient"]
     visible = list(cfg.get("visible") or DEFAULT_LAYOUT["patient"]["visible"])
     order = list(cfg.get("order") or DEFAULT_LAYOUT["patient"]["order"])
     items = [k for k in order if k in visible and k in FIELD_LABELS]
     if "name" in visible and "name" not in items:
-        items.insert(0,"name")
+        items.insert(0, "name")
     if not items:
-        return y - 10
-    cols = 1 if int(cfg.get("columns",2)) == 1 else 2
-    width = PAGE_W-left-right
-    gap = 20
-    col_width = (width-gap*(cols-1))/cols
-    rows = [items[i:i+cols] for i in range(0,len(items),cols)]
-    row_h = 14
-    height = 42 + len(rows)*row_h + 8
-    bg = _color(cfg.get("background"), HexColor("#F5F6F8"))
-    border = _color(cfg.get("border"), HexColor("#E2E5EC"))
-    if cfg.get("style","card") != "plain":
-        c.setFillColor(bg); c.setStrokeColor(border)
-        c.roundRect(left, y-height, width, height, 5, fill=1, stroke=1)
+        return y - 8
+
+    cols = 1 if int(cfg.get("columns", 2)) == 1 else 2
+    width = PAGE_W - left - right
+    gap = 18
+    col_width = (width - gap * (cols - 1)) / cols
+    size = float(cfg.get("font_size", 8.7))
+    label_font = _font_name(layout, bold=True)
+    value_font = _font_name(layout)
     text_color = _color(layout["appearance"].get("text"), black)
-    _text(c, "PATIENT INFORMATION", left+10, y-15, _font_name(layout,bold=True), 8.5, text_color)
-    current = y-29
+    muted = _color(layout["appearance"].get("muted"), HexColor("#667085"))
+    bg = _color(cfg.get("background"), HexColor("#F5F7FA"))
+    border = _color(cfg.get("border"), HexColor("#E1E5EC"))
+
+    rows = [items[i:i + cols] for i in range(0, len(items), cols)]
+    row_h = 20
+    height = 30 + len(rows) * row_h + 8
+
+    if cfg.get("style", "card") != "plain":
+        c.setFillColor(bg)
+        c.setStrokeColor(border)
+        c.setLineWidth(.7)
+        c.roundRect(left, y - height, width, height, 7, fill=1, stroke=1)
+
+    _text(c, "PATIENT INFORMATION", left + 11, y - 16,
+          _font_name(layout, bold=True), 7.8, text_color)
+    c.setStrokeColor(border)
+    c.setLineWidth(.6)
+    c.line(left + 11, y - 22, left + width - 11, y - 22)
+
+    current = y - 36
     for row in rows:
-        for idx,key in enumerate(row):
-            value = _patient_value(patient,key)
-            x = left + idx*(col_width+gap)
-            _draw_label_value(c, FIELD_LABELS[key], value, x, current, col_width, layout)
+        for idx, key in enumerate(row):
+            value = _patient_value(patient, key)
+            x = left + idx * (col_width + gap)
+            label = FIELD_LABELS[key]
+            _text(c, label.upper(), x, current, label_font, 6.6, muted)
+            lines = _wrap(c, value, col_width - 4, value_font, size)
+            _text(c, lines[0] if lines else "", x, current - 10,
+                  value_font, size, text_color)
         current -= row_h
-    return y-height-8
+
+    return y - height - 12
+
+
+def _draw_table_header(c, columns, xs, widths, y, layout):
+    results = layout["results"]
+    text_color = _color(layout["appearance"].get("text"), black)
+    header_bg = _color(results.get("table_header_background"), HexColor("#F7F8FA"))
+    border = HexColor("#E2E5EC")
+    height = 20
+    c.setFillColor(header_bg)
+    c.setStrokeColor(border)
+    c.setLineWidth(.6)
+    c.roundRect(xs[0] - 5, y - 4, sum(widths) + 10, height, 4, fill=1, stroke=0)
+    for x, key in zip(xs, columns):
+        _text(c, RESULT_LABELS[key], x, y + 5,
+              _font_name(layout, bold=True),
+              float(results.get("header_size", 7.2)), text_color)
+    return y - 23
+
 
 def _draw_section(c, title, rows, y, layout):
     left, right, body_top, bottom = _metrics(layout)
     results = layout["results"]
     text_color = _color(layout["appearance"].get("text"), black)
     accent = _color(layout["appearance"].get("accent"), HexColor("#5F52E8"))
-    if y < bottom + 70:
-        c.showPage(); y = body_top
-    if results.get("section_headers",True):
-        c.setFillColor(_color(results.get("section_background"), HexColor("#ECEAFB")))
-        c.roundRect(left, y-18, PAGE_W-left-right, 18, 3, fill=1, stroke=0)
-        _text(c, title.upper(), left+8, y-12, _font_name(layout,bold=True), 8.5, text_color)
-        y -= 29
-    columns = [x for x in results.get("columns",[]) if x in RESULT_LABELS]
+    width = PAGE_W - left - right
+
+    columns = [x for x in results.get("columns", []) if x in RESULT_LABELS]
     if not columns:
         columns = DEFAULT_LAYOUT["results"]["columns"]
-    available = PAGE_W-left-right-16
-    widths = {"name": available*.42, "value": available*.18, "unit": available*.16, "reference_range": available*.24}
-    xs=[]; cursor=left+8
-    for key in columns:
-        xs.append(cursor); cursor += widths.get(key,available/len(columns))
-    header_bg = _color(results.get("table_header_background"), HexColor("#F7F7FA"))
-    c.setFillColor(header_bg)
-    c.rect(left, y-2, PAGE_W-left-right, 18, fill=1, stroke=0)
-    header_size=float(results.get("header_size",7.5))
-    for x,key in zip(xs,columns):
-        _text(c, RESULT_LABELS[key], x, y+10, _font_name(layout,bold=True), header_size, text_color)
-    y -= 4
-    size=float(results.get("font_size",9))
-    for row in rows:
-        values={k:str(row.get(k,"") or "").strip() for k in columns}
-        line_sets={k:_wrap(c,values[k],widths.get(k,80)-10,_font_name(layout),size) for k in columns}
-        count=max([len(v) for v in line_sets.values()] or [1])
-        if y-count*11 < bottom+28:
-            c.showPage(); y=body_top
-            if results.get("section_headers",True):
-                c.setFillColor(_color(results.get("section_background"), HexColor("#ECEAFB")))
-                c.roundRect(left,y-18,PAGE_W-left-right,18,3,fill=1,stroke=0)
-                _text(c,title.upper(),left+8,y-12,_font_name(layout,bold=True),8.5,text_color)
-                y-=29
-            for x,key in zip(xs,columns):
-                _text(c,RESULT_LABELS[key],x,y+10,_font_name(layout,bold=True),header_size,text_color)
-        for i in range(count):
-            yy=y-i*11
-            for x,key in zip(xs,columns):
-                lines=line_sets[key]
-                _text(c,lines[i] if i<len(lines) else "",x,yy,_font_name(layout),size,text_color)
-        if results.get("show_grid"):
-            c.setStrokeColor(HexColor("#E8E9EE")); c.line(left,y-count*11-5,PAGE_W-right,y-count*11-5)
-        y -= max(18,count*11+7)
-    return y-8
+
+    weights = {"name": 0.42, "value": 0.18, "unit": 0.16, "reference_range": 0.24}
+    usable = width - 16
+    widths = [usable * weights.get(k, 1 / len(columns)) for k in columns]
+    scale = usable / sum(widths)
+    widths = [w * scale for w in widths]
+    xs = []
+    cursor = left + 8
+    for w in widths:
+        xs.append(cursor)
+        cursor += w
+
+    def section_heading(current_y):
+        if results.get("section_headers", True):
+            bg = _color(results.get("section_background"), HexColor("#ECEAFB"))
+            c.setFillColor(bg)
+            c.roundRect(left, current_y - 18, width, 18, 4, fill=1, stroke=0)
+            _text(c, title.upper(), left + 9, current_y - 12,
+                  _font_name(layout, bold=True), 7.9, text_color)
+            current_y -= 27
+        return current_y
+
+    if y < bottom + 65:
+        c.showPage()
+        y = body_top
+    y = section_heading(y)
+    y = _draw_table_header(c, columns, xs, widths, y, layout)
+
+    size = float(results.get("font_size", 9))
+    result_font = _font_name(layout)
+    result_bold_font = _font_name(layout, bold=True)
+    row_alt = _color(results.get("row_alt_background"), HexColor("#FBFCFE"))
+    border = HexColor("#EAECF0")
+
+    for index, row in enumerate(rows):
+        values = {k: str(row.get(k, "") or "").strip() for k in columns}
+        line_sets = {
+            k: _wrap(c, values[k], widths[i] - 10, result_font, size)
+            for i, k in enumerate(columns)
+        }
+        count = max([len(v) for v in line_sets.values()] or [1])
+        row_height = max(21, count * 11 + 7)
+
+        if y - row_height < bottom + 18:
+            c.showPage()
+            y = body_top
+            y = section_heading(y)
+            y = _draw_table_header(c, columns, xs, widths, y, layout)
+
+        if index % 2 == 1:
+            c.setFillColor(row_alt)
+            c.rect(left + 3, y - row_height + 4, width - 6, row_height,
+                   fill=1, stroke=0)
+
+        # Result values are deliberately stronger than test names so the
+        # generated report reads like a clinical result sheet, not raw OCR.
+        for i, key in enumerate(columns):
+            lines = line_sets[key]
+            for line_index in range(count):
+                yy = y - line_index * 11
+                value = lines[line_index] if line_index < len(lines) else ""
+                font = result_bold_font if key == "value" else result_font
+                _text(c, value, xs[i], yy, font, size, text_color)
+
+        c.setStrokeColor(border)
+        c.setLineWidth(.45)
+        c.line(left + 8, y - row_height + 2, left + width - 8, y - row_height + 2)
+        y -= row_height
+
+    return y - 8
+
 
 def _group_tests(tests):
     groups, order = {}, []
