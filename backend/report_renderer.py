@@ -329,11 +329,20 @@ def make_pdf_body_on_template(template_path,data,out,layout=None):
     body=render_body(data,layout)
     out.parent.mkdir(parents=True,exist_ok=True)
     if template_path and Path(template_path).exists():
-        base=PdfReader(template_path); overlay=PdfReader(body); writer=PdfWriter()
-        for index,page in enumerate(base.pages):
-            if index < len(overlay.pages):
-                page.merge_page(overlay.pages[index])
+        base=PdfReader(template_path)
+        overlay=PdfReader(body)
+        writer=PdfWriter()
+
+        # A letterhead is normally one page. Repeat that page for additional
+        # report pages so long reports keep the same professional header/footer
+        # instead of silently losing overflow content.
+        for index, overlay_page in enumerate(overlay.pages):
+            base_page = base.pages[index] if index < len(base.pages) else base.pages[-1]
+            page = base_page
+            page.merge_page(overlay_page)
             writer.add_page(page)
-        with open(out,"wb") as f: writer.write(f)
+
+        with open(out,"wb") as f:
+            writer.write(f)
     else:
         out.write_bytes(body.read())
