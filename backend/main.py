@@ -26,6 +26,7 @@ def migrate_legacy_sqlite():
             if "upi_id" not in cols: conn.execute(text("ALTER TABLE centres ADD COLUMN upi_id VARCHAR DEFAULT ''"))
             if "credits" not in cols: conn.execute(text("ALTER TABLE centres ADD COLUMN credits INTEGER DEFAULT 10"))
             if "template_path" not in cols: conn.execute(text("ALTER TABLE centres ADD COLUMN template_path VARCHAR DEFAULT ''"))
+            if "report_layout" not in cols: conn.execute(text("ALTER TABLE centres ADD COLUMN report_layout TEXT DEFAULT '{}'"))
             if "enabled" not in cols: conn.execute(text("ALTER TABLE centres ADD COLUMN enabled BOOLEAN DEFAULT 1"))
             if "created_at" not in cols: conn.execute(text("ALTER TABLE centres ADD COLUMN created_at DATETIME"))
             if "password" in cols:
@@ -314,7 +315,7 @@ def verify_payment(rid:int,c=Depends(current),db:Session=Depends(get_db)):
     if not r or r.centre_id!=c.id: raise HTTPException(404,"Report not found")
     r.payment="PAID"; r.status="RELEASED"; notify(db,c.id,r.id,"PAYMENT_RECEIVED",f"Payment verified for report #{r.id}. Report released."); queue_wa(db,c,r,"FINAL_REPORT",{"phone":r.patient_phone,"patient_name":r.patient_name or "Patient","url":f"/patient/report/{r.token}","filename":f"Aarogyam_Report_{r.id}.pdf"}); db.commit(); return report_dict(r)
 @app.get("/api/settings")
-def settings_get(c=Depends(current),db:Session=Depends(get_db)): return {"whatsapp_enabled":c.whatsapp_enabled,"upi_id":c.upi_id,"credits":c.credits,"credit_price_inr":float(system_setting(db,"credit_price_inr",str(CREDIT_PRICE_INR))),"whatsapp_provider":WHATSAPP_PROVIDER,"payment_template":WHATSAPP_PAYMENT_TEMPLATE,"report_template":WHATSAPP_REPORT_TEMPLATE}
+def settings_get(c=Depends(current),db:Session=Depends(get_db)):\n    try: layout=json.loads(c.report_layout or "{}")\n    except Exception: layout={}\n    return {"whatsapp_enabled":c.whatsapp_enabled,"upi_id":c.upi_id,"credits":c.credits,"credit_price_inr":float(system_setting(db,"credit_price_inr",str(CREDIT_PRICE_INR))),"whatsapp_provider":WHATSAPP_PROVIDER,"payment_template":WHATSAPP_PAYMENT_TEMPLATE,"report_template":WHATSAPP_REPORT_TEMPLATE,"report_layout":layout}
 @app.put("/api/settings")
 def settings_save(whatsapp_enabled:bool=Form(...),upi_id:str=Form(""),c=Depends(current),db:Session=Depends(get_db)):
     c.whatsapp_enabled=whatsapp_enabled; c.upi_id=upi_id.strip(); db.commit(); return {"ok":True}
