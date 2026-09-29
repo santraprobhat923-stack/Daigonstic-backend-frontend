@@ -145,9 +145,138 @@ function rows(r){return r.length?'<table class="table"><thead><tr><th>Report</th
 async function notes(){currentPage="notes";const n=await api("/api/notifications");app.innerHTML=shell('<div class="wrap"><div class="page-head"><div><div class="eyebrow">Activity</div><h1>Notifications</h1><p>Patient report delivery and centre events.</p></div></div><div class="card">'+(n.length?n.map(x=>'<div class="notice"><b>'+esc(x.kind)+'</b><p>'+esc(x.message)+'</p><small class="muted">'+esc(x.created_at)+'</small></div>').join(""):'<p class="muted">No notifications yet.</p>')+'</div></div>')}
 async function settings(){currentPage="settings";const s=await api("/api/settings");app.innerHTML=shell('<div class="wrap"><div class="page-head"><div><div class="eyebrow">Administration</div><h1>Centre settings</h1><p>Configure patient delivery and your report template.</p></div></div><div class="settings-grid"><div class="card"><h3>Patient delivery</h3><div class="field"><label>WHATSAPP AUTOMATION</label><select id="wa"><option value="false">OFF</option><option value="true" '+(s.whatsapp_enabled?"selected":"")+'>ON</option></select></div><div class="field"><label>CENTRE UPI ID</label><input id="upi" value="'+esc(s.upi_id)+'" placeholder="centre@upi"></div><div class="notice"><b>Automatic delivery</b><br><span class="muted">Due → payment request. Paid/verified → final report delivery.</span></div><div class="notice"><b>Provider:</b> '+esc(s.whatsapp_provider||"mock")+'<br><b>Payment template:</b> '+esc(s.payment_template||"—")+'<br><b>Report template:</b> '+esc(s.report_template||"—")+'</div><div class="notice">Credits available: <b>'+esc(s.credits)+'</b><br>Current credit price: <b>₹'+esc(s.credit_price_inr)+'</b></div><button class="primary" onclick="saveSettings()">Save delivery settings</button></div><div class="card"><h3>Report template</h3><p class="muted">Upload the blank PDF used by your centre. Aarogyam places generated report content into the template body.</p><input id="tpl" type="file" accept=".pdf"><br><br><button onclick="uploadTemplate()">Upload PDF template</button><div class="footer-note">Template placement should be validated against your actual centre letterhead before production.</div><hr><h3>Report design</h3><p class="muted">Choose which patient fields and result columns appear, plus the basic visual style. This is saved separately for this centre and applied to future PDFs.</p><button class="primary" onclick="reportDesigner()">Open Report Designer</button></div></div></div>')}
 
-async function reportDesigner(){currentPage="settings";const s=await api("/api/settings");const l=s.report_layout||{};const p=l.patient||{};const r=l.results||{};const a=l.appearance||{};const pg=l.page||{};const pv=(k,d)=>p[k]===undefined?d:p[k];const rv=(k,d)=>r[k]===undefined?d:r[k];const av=(k,d)=>a[k]===undefined?d:a[k];const gv=(k,d)=>pg[k]===undefined?d:pg[k];const visible=p.visible||["name","age","sex","code","uhid","referred_by","received_on","reported_on","phone"];const order=p.order||["name","age_gender","code","uhid","referred_by","received_on","reported_on","phone"];const cols=r.columns||["name","value","unit","reference_range"];const fieldDefs=[["name","Patient Name"],["age","Age"],["sex","Gender"],["code","Patient ID"],["uhid","UHID"],["referred_by","Referred By"],["received_on","Received On"],["reported_on","Reported On"],["phone","Phone"]];const resultDefs=[["name","Test / Parameter"],["value","Result"],["unit","Unit"],["reference_range","Reference Range"]];app.innerHTML=shell('<div class="wrap"><div class="page-head"><div><div class="eyebrow">Report design</div><h1>Report Template Designer</h1><p>Configure the report structure once. Future generated reports for this centre will use these settings.</p></div><div class="actions"><button onclick="settings()">Back to settings</button><button class="primary" onclick="saveReportLayout()">Save report design</button></div></div><div class="designer-grid"><div><div class="card"><h3>1. Patient credentials</h3><p class="muted">Select the fields that should appear in the patient-information area.</p><div class="designer-check-grid">'+fieldDefs.map(x=>'<label class="check-row"><input type="checkbox" class="patient-field" value="'+x[0]+'" '+(visible.includes(x[0])?"checked":"")+'><span>'+x[1]+'</span></label>').join("")+'</div><div class="settings-grid"><div class="field"><label>COLUMNS</label><select id="layoutPatientColumns"><option value="1" '+(Number(pv("columns",2))===1?"selected":"")+'>1 column</option><option value="2" '+(Number(pv("columns",2))===2?"selected":"")+' >2 columns</option></select></div><div class="field"><label>STYLE</label><select id="layoutPatientStyle"><option value="card" '+(pv("style","card")==="card"?"selected":"")+'>Card / shaded</option><option value="plain" '+(pv("style","card")==="plain"?"selected":"")+'>Plain</option></select></div></div><div class="field"><label>FIELD ORDER</label><input id="layoutPatientOrder" value="'+esc(order.join(", "))+'" placeholder="name, age_gender, code, uhid..."><small class="muted">Use: name, age_gender, code, uhid, referred_by, received_on, reported_on, phone. Hidden fields are ignored.</small></div></div><div class="card"><h3>2. Test result columns</h3><p class="muted">Choose what appears in every result table.</p><div class="designer-check-grid">'+resultDefs.map(x=>'<label class="check-row"><input type="checkbox" class="result-column" value="'+x[0]+'" '+(cols.includes(x[0])?"checked":"")+'><span>'+x[1]+'</span></label>').join("")+'</div><label class="check-row"><input id="layoutSectionHeaders" type="checkbox" '+(rv("section_headers",true)?"checked":"")+'><span>Show section headers</span></label><label class="check-row"><input id="layoutGrid" type="checkbox" '+(rv("show_grid",false)?"checked":"")+'><span>Show row separators</span></label></div><div class="card"><h3>3. Appearance</h3><div class="settings-grid"><div class="field"><label>FONT</label><select id="layoutFont"><option value="Helvetica" '+(av("font","Helvetica")==="Helvetica"?"selected":"")+'>Helvetica</option><option value="Times-Roman" '+(av("font","Helvetica")==="Times-Roman"?"selected":"")+'>Times</option><option value="Courier" '+(av("font","Helvetica")==="Courier"?"selected":"")+'>Courier</option></select></div><div class="field"><label>RESULT FONT SIZE</label><input id="layoutResultSize" type="number" min="7" max="14" step=".5" value="'+esc(rv("font_size",9))+'"></div><div class="field"><label>PATIENT FONT SIZE</label><input id="layoutPatientSize" type="number" min="7" max="14" step=".5" value="'+esc(pv("font_size",8.5))+'"></div><div class="field"><label>PATIENT BACKGROUND</label><input id="layoutPatientBg" type="color" value="'+esc(pv("background","#F5F6F8"))+'"></div><div class="field"><label>SECTION BACKGROUND</label><input id="layoutSectionBg" type="color" value="'+esc(rv("section_background","#ECEAFB"))+'"></div><div class="field"><label>TABLE HEADER BACKGROUND</label><input id="layoutTableBg" type="color" value="'+esc(rv("table_header_background","#F7F7FA"))+'"></div><div class="field"><label>TEXT COLOUR</label><input id="layoutText" type="color" value="'+esc(av("text","#151A2D"))+'"></div><div class="field"><label>ACCENT / LINE COLOUR</label><input id="layoutAccent" type="color" value="'+esc(av("accent","#5F52E8"))+'"></div></div></div><div class="card"><h3>4. Page spacing</h3><p class="muted">These values protect the uploaded letterhead header/footer while positioning the generated body.</p><div class="settings-grid"><div class="field"><label>LEFT MARGIN</label><input id="layoutLeft" type="number" min="20" max="100" value="'+esc(gv("left",52))+'"></div><div class="field"><label>RIGHT MARGIN</label><input id="layoutRight" type="number" min="20" max="100" value="'+esc(gv("right",52))+'"></div><div class="field"><label>TOP RESERVED AREA</label><input id="layoutTop" type="number" min="70" max="220" value="'+esc(gv("top",132))+'"></div><div class="field"><label>BOTTOM RESERVED AREA</label><input id="layoutBottom" type="number" min="40" max="160" value="'+esc(gv("bottom",82))+'"></div></div></div></div><div><div class="card designer-preview"><div class="eyebrow">Preview structure</div><h3>Future report</h3><div class="preview-page"><div class="preview-header">CENTRE LETTERHEAD / LOGO</div><div class="preview-patient"><b>PATIENT INFORMATION</b><div><span>Patient Name: Sangeeta Verma</span><span>Age / Gender: 32 / F</span></div><div><span>Patient ID: AAR-00019</span><span>UHID: UH-00019</span></div></div><div class="preview-title">LABORATORY REPORT</div><div class="preview-section">BIOCHEMISTRY</div><div class="preview-table"><b>TEST</b><b>RESULT</b><b>UNIT</b><b>REFERENCE</b><span>ALT</span><span>24</span><span>U/L</span><span>0-41</span><span>AST</span><span>19</span><span>U/L</span><span>0-40</span></div><div class="preview-footer">CENTRE FOOTER / CONTACT / SIGNATURE</div></div></div><div class="card"><h3>How it works</h3><p class="muted">This design is stored per centre. It does not change OCR or verification. After saving, newly generated PDFs use the saved layout automatically.</p></div></div></div>')}
+async function reportDesigner(){
+  currentPage="settings";
+  const s=await api("/api/settings");
+  const l=s.report_layout||{}, p=l.patient||{}, r=l.results||{}, a=l.appearance||{}, pg=l.page||{};
+  const pv=(k,d)=>p[k]===undefined?d:p[k], rv=(k,d)=>r[k]===undefined?d:r[k], av=(k,d)=>a[k]===undefined?d:a[k], gv=(k,d)=>pg[k]===undefined?d:pg[k];
+  const visible=p.visible||["name","age","sex","code","uhid","referred_by","received_on","reported_on","phone"];
+  const order=p.order||["name","age_gender","code","uhid","referred_by","received_on","reported_on","phone"];
+  const cols=r.columns||["name","value","unit","reference_range"];
+  const fieldDefs=[["name","Patient Name"],["age","Age"],["sex","Gender"],["code","Patient ID"],["uhid","UHID"],["referred_by","Referred By"],["received_on","Received On"],["reported_on","Reported On"],["phone","Phone"]];
+  const resultDefs=[["name","Test / Parameter"],["value","Result"],["unit","Unit"],["reference_range","Reference Range"]];
 
-async function saveReportLayout(){const current=await api("/api/settings");const checked=s=>Array.from(document.querySelectorAll(s)).filter(x=>x.checked).map(x=>x.value);const visible=checked(".patient-field");const columns=checked(".result-column");if(!visible.includes("name"))visible.unshift("name");if(!columns.includes("name"))columns.unshift("name");const order=document.getElementById("layoutPatientOrder").value.split(",").map(x=>x.trim()).filter(Boolean);const layout={page:{left:Number(document.getElementById("layoutLeft").value),right:Number(document.getElementById("layoutRight").value),top:Number(document.getElementById("layoutTop").value),bottom:Number(document.getElementById("layoutBottom").value)},patient:{visible,order,columns:Number(document.getElementById("layoutPatientColumns").value),style:document.getElementById("layoutPatientStyle").value,font_size:Number(document.getElementById("layoutPatientSize").value),label_bold:true,background:document.getElementById("layoutPatientBg").value,border:"#E2E5EC"},results:{columns,section_headers:document.getElementById("layoutSectionHeaders").checked,section_background:document.getElementById("layoutSectionBg").value,table_header_background:document.getElementById("layoutTableBg").value,font_size:Number(document.getElementById("layoutResultSize").value),header_size:7.5,show_grid:document.getElementById("layoutGrid").checked},appearance:{text:document.getElementById("layoutText").value,accent:document.getElementById("layoutAccent").value,font:document.getElementById("layoutFont").value}};try{await api("/api/settings",{method:"PUT",body:new URLSearchParams({whatsapp_enabled:""+current.whatsapp_enabled,upi_id:current.upi_id||"",report_layout:JSON.stringify(layout)})});alert("Report design saved. Future PDFs will use this layout.");await settings()}catch(e){alert(e.message)}}
+  const presets={
+    clinical:{name:"Clinical Classic",desc:"Clean laboratory report with restrained blue accents.",patientBg:"#F6F8FB",sectionBg:"#EEF3F8",tableBg:"#F8FAFC",text:"#172033",accent:"#285F8F",font:"Helvetica",patientStyle:"card",grid:false},
+    modern:{name:"Modern Clean",desc:"Compact modern layout with subtle lavender accents.",patientBg:"#F6F7FC",sectionBg:"#F0EEFF",tableBg:"#FAFAFD",text:"#151A2D",accent:"#5F52E8",font:"Helvetica",patientStyle:"card",grid:false},
+    minimal:{name:"Minimal",desc:"Mostly white clinical sheet with very light separators.",patientBg:"#FFFFFF",sectionBg:"#F5F6F8",tableBg:"#FBFBFC",text:"#20242D",accent:"#52606D",font:"Helvetica",patientStyle:"plain",grid:false}
+  };
+  const activePreset=Object.keys(presets).find(k=>presets[k].accent===av("accent",""))||"clinical";
+
+  app.innerHTML=shell(`
+  <div class="wrap">
+    <div class="page-head">
+      <div><div class="eyebrow">Report design</div><h1>Professional Report Designer</h1><p>Build a consistent clinical report once; every new PDF uses the saved design.</p></div>
+      <div class="actions"><button onclick="settings()">Back</button><button class="primary" onclick="saveReportLayout()">Save design</button></div>
+    </div>
+
+    <div class="designer-toolbar card">
+      <div><div><h3>Choose a visual starting point</h3><p class="muted">Presets change only the report appearance. Your patient fields and result data remain unchanged.</p></div></div>
+      <div class="preset-grid">
+        ${Object.entries(presets).map(([key,v])=>`<button class="preset-card ${activePreset===key?"selected":""}" onclick="applyReportPreset('${key}')"><span class="preset-dot" style="background:${v.accent}"></span><strong>${v.name}</strong><small>${v.desc}</small></button>`).join("")}
+      </div>
+    </div>
+
+    <div class="designer-grid">
+      <div>
+        <div class="card">
+          <div class="designer-section-head"><div><span class="designer-step">01</span><div><h3>Patient information</h3><p class="muted">Choose what appears beneath the centre letterhead.</p></div></div></div>
+          <div class="designer-check-grid">${fieldDefs.map(x=>`<label class="check-row"><input type="checkbox" class="patient-field" value="${x[0]}" ${visible.includes(x[0])?"checked":""}><span>${x[1]}</span></label>`).join("")}</div>
+          <div class="settings-grid">
+            <div class="field"><label>COLUMNS</label><select id="layoutPatientColumns"><option value="1" ${Number(pv("columns",2))===1?"selected":""}>1 column</option><option value="2" ${Number(pv("columns",2))===2?"selected":""}>2 columns</option></select></div>
+            <div class="field"><label>STYLE</label><select id="layoutPatientStyle"><option value="card" ${pv("style","card")==="card"?"selected":""}>Card / shaded</option><option value="plain" ${pv("style","card")==="plain"?"selected":""}>Plain</option></select></div>
+          </div>
+          <div class="field"><label>FIELD ORDER</label><input id="layoutPatientOrder" value="${esc(order.join(", "))}" placeholder="name, age_gender, code, uhid..."><small class="muted">Hidden fields are ignored. Use age_gender when age and gender should share one line.</small></div>
+        </div>
+
+        <div class="card">
+          <div class="designer-section-head"><div><span class="designer-step">02</span><div><h3>Result table</h3><p class="muted">Keep the clinical values prominent and easy to scan.</p></div></div></div>
+          <div class="designer-check-grid">${resultDefs.map(x=>`<label class="check-row"><input type="checkbox" class="result-column" value="${x[0]}" ${cols.includes(x[0])?"checked":""}><span>${x[1]}</span></label>`).join("")}</div>
+          <div class="settings-grid">
+            <label class="check-row"><input id="layoutSectionHeaders" type="checkbox" ${rv("section_headers",true)?"checked":""}><span>Section headers</span></label>
+            <label class="check-row"><input id="layoutGrid" type="checkbox" ${rv("show_grid",false)?"checked":""}><span>Row separators</span></label>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="designer-section-head"><div><span class="designer-step">03</span><div><h3>Typography & colour</h3><p class="muted">Use restrained colours suitable for printed laboratory reports.</p></div></div></div>
+          <div class="settings-grid">
+            <div class="field"><label>FONT</label><select id="layoutFont"><option value="Helvetica" ${av("font","Helvetica")==="Helvetica"?"selected":""}>Helvetica</option><option value="Times-Roman" ${av("font","Helvetica")==="Times-Roman"?"selected":""}>Times</option><option value="Courier" ${av("font","Helvetica")==="Courier"?"selected":""}>Courier</option></select></div>
+            <div class="field"><label>RESULT SIZE</label><input id="layoutResultSize" type="number" min="7" max="12" step=".5" value="${esc(rv("font_size",9))}"></div>
+            <div class="field"><label>PATIENT SIZE</label><input id="layoutPatientSize" type="number" min="7" max="12" step=".5" value="${esc(pv("font_size",8.5))}"></div>
+            <div class="field"><label>PATIENT BACKGROUND</label><input id="layoutPatientBg" type="color" value="${esc(pv("background","#F5F6F8"))}"></div>
+            <div class="field"><label>SECTION BACKGROUND</label><input id="layoutSectionBg" type="color" value="${esc(rv("section_background","#ECEAFB"))}"></div>
+            <div class="field"><label>TABLE HEADER</label><input id="layoutTableBg" type="color" value="${esc(rv("table_header_background","#F7F7FA"))}"></div>
+            <div class="field"><label>TEXT COLOUR</label><input id="layoutText" type="color" value="${esc(av("text","#151A2D"))}"></div>
+            <div class="field"><label>ACCENT COLOUR</label><input id="layoutAccent" type="color" value="${esc(av("accent","#5F52E8"))}"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="designer-section-head"><div><span class="designer-step">04</span><div><h3>Letterhead safe area</h3><p class="muted">Reserve the uploaded logo/header/footer. These are PDF points, not pixels.</p></div></div></div>
+          <div class="settings-grid">
+            <div class="field"><label>LEFT</label><input id="layoutLeft" type="number" min="20" max="100" value="${esc(gv("left",52))}"></div>
+            <div class="field"><label>RIGHT</label><input id="layoutRight" type="number" min="20" max="100" value="${esc(gv("right",52))}"></div>
+            <div class="field"><label>TOP RESERVED</label><input id="layoutTop" type="number" min="70" max="220" value="${esc(gv("top",132))}"></div>
+            <div class="field"><label>BOTTOM RESERVED</label><input id="layoutBottom" type="number" min="40" max="160" value="${esc(gv("bottom",82))}"></div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card designer-preview-card">
+          <div class="preview-toolbar"><div><span class="eyebrow">Visual preview</span><h3>Clinical report layout</h3></div><span class="preview-status">PRINT READY</span></div>
+          <div class="preview-page professional-preview">
+            <div class="preview-letterhead"><span>YOUR CENTRE LOGO</span><small>Letterhead / header remains untouched</small></div>
+            <div class="preview-patient-pro"><b>PATIENT INFORMATION</b><div><span><small>PATIENT NAME</small>Sangeeta Verma</span><span><small>AGE / GENDER</small>32Y / F</span></div><div><span><small>PATIENT ID</small>AAR-00019</span><span><small>UHID</small>UH-00019</span></div></div>
+            <div class="preview-report-title"><small>LABORATORY REPORT</small><strong>BIOCHEMISTRY</strong></div>
+            <div class="preview-result-header"><span>TEST / PARAMETER</span><span>RESULT</span><span>UNIT</span><span>REFERENCE</span></div>
+            <div class="preview-result-row"><span>ALT</span><strong>24</strong><span>U/L</span><span>0–41</span></div>
+            <div class="preview-result-row alt"><span>AST</span><strong>19</strong><span>U/L</span><span>0–40</span></div>
+            <div class="preview-result-row"><span>Free T4</span><strong>1.24</strong><span>ng/dL</span><span>0.70–1.48</span></div>
+            <div class="preview-sign"><span>Verified by Technician</span><span>Authorised Signatory</span></div>
+            <div class="preview-letter-footer">CENTRE FOOTER • CONTACT • ADDRESS • DOCTOR / SIGNATURE AREA</div>
+          </div>
+          <div class="preview-note"><span>✓</span><p>Only the body is generated over the uploaded template. The centre's logo, header, footer and sign area remain part of the original PDF.</p></div>
+        </div>
+      </div>
+    </div>
+  </div>`);
+}
+
+async function applyReportPreset(key){
+  const presets={clinical:{patientBg:"#F6F8FB",sectionBg:"#EEF3F8",tableBg:"#F8FAFC",text:"#172033",accent:"#285F8F",font:"Helvetica",patientStyle:"card"},modern:{patientBg:"#F6F7FC",sectionBg:"#F0EEFF",tableBg:"#FAFAFD",text:"#151A2D",accent:"#5F52E8",font:"Helvetica",patientStyle:"card"},minimal:{patientBg:"#FFFFFF",sectionBg:"#F5F6F8",tableBg:"#FBFBFC",text:"#20242D",accent:"#52606D",font:"Helvetica",patientStyle:"plain"}};
+  const p=presets[key]; if(!p)return;
+  document.getElementById("layoutPatientBg").value=p.patientBg;
+  document.getElementById("layoutSectionBg").value=p.sectionBg;
+  document.getElementById("layoutTableBg").value=p.tableBg;
+  document.getElementById("layoutText").value=p.text;
+  document.getElementById("layoutAccent").value=p.accent;
+  document.getElementById("layoutFont").value=p.font;
+  document.getElementById("layoutPatientStyle").value=p.patientStyle;
+  document.querySelectorAll(".preset-card").forEach(x=>x.classList.remove("selected"));
+  document.querySelectorAll(".preset-card").forEach(x=>{if(x.textContent.includes(key==="clinical"?"Clinical Classic":key==="modern"?"Modern Clean":"Minimal"))x.classList.add("selected")});
+}
+
+async function saveReportLayout(){
+  const current=await api("/api/settings");
+  const checked=s=>Array.from(document.querySelectorAll(s)).filter(x=>x.checked).map(x=>x.value);
+  const visible=checked(".patient-field"), columns=checked(".result-column");
+  if(!visible.includes("name"))visible.unshift("name");
+  if(!columns.includes("name"))columns.unshift("name");
+  const order=document.getElementById("layoutPatientOrder").value.split(",").map(x=>x.trim()).filter(Boolean);
+  const layout={
+    page:{left:Number(document.getElementById("layoutLeft").value),right:Number(document.getElementById("layoutRight").value),top:Number(document.getElementById("layoutTop").value),bottom:Number(document.getElementById("layoutBottom").value)},
+    patient:{visible,order,columns:Number(document.getElementById("layoutPatientColumns").value),style:document.getElementById("layoutPatientStyle").value,font_size:Number(document.getElementById("layoutPatientSize").value),label_bold:true,background:document.getElementById("layoutPatientBg").value,border:"#E1E5EC"},
+    results:{columns,section_headers:document.getElementById("layoutSectionHeaders").checked,section_background:document.getElementById("layoutSectionBg").value,table_header_background:document.getElementById("layoutTableBg").value,row_alt_background:"#FBFCFE",font_size:Number(document.getElementById("layoutResultSize").value),header_size:7.2,show_grid:document.getElementById("layoutGrid").checked},
+    appearance:{text:document.getElementById("layoutText").value,accent:document.getElementById("layoutAccent").value,muted:"#667085",font:document.getElementById("layoutFont").value}
+  };
+  try{
+    await api("/api/settings",{method:"PUT",body:new URLSearchParams({whatsapp_enabled:""+current.whatsapp_enabled,upi_id:current.upi_id||"",report_layout:JSON.stringify(layout)})});
+    alert("Professional report design saved. New PDFs will use it.");
+    await settings();
+  }catch(e){alert(e.message)}
+}
 
 async function saveSettings(){try{await api("/api/settings",{method:"PUT",body:new URLSearchParams({whatsapp_enabled:document.getElementById("wa").value,upi_id:document.getElementById("upi").value})});alert("Settings saved");await settings()}catch(e){alert(e.message)}}
 async function uploadTemplate(){const el=document.getElementById("tpl");if(!el.files[0])return alert("Choose a PDF");const f=new FormData();f.append("file",el.files[0]);try{await api("/api/settings/template",{method:"POST",body:f});alert("Template saved. Future generated reports will use it.");await settings()}catch(e){alert(e.message)}}
