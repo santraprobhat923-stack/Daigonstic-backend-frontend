@@ -267,7 +267,7 @@ def _parse_tests(readings):
             return "", ""
         reference=""
         # Normalize a few OCR forms of inequality symbols before matching.
-        ref=re.search(r"([<>]\s*\d+(?:[.,]\d+)?(?:\s*[-–]\s*[<>]?\d+(?:[.,]\d+)?)?)\s*$",rest)
+        ref=re.search(r"(?:^|\s)(?:[HLN]|FLAG)?\s*:?\s*([<>]?\d+(?:[.,]\d+)?(?:\s*[-–]\s*[<>]?\d+(?:[.,]\d+)?)?)\s*$",rest,re.I)
         if ref:
             reference=ref.group(1).replace(" ","")
             rest=rest[:ref.start()].strip(" |,:;-")
@@ -310,8 +310,9 @@ def _parse_tests(readings):
                     unit=""
                     reference=""
                     for c in cols[result_idx+1:]:
-                        if not reference and re.fullmatch(range_re,c,re.I):
-                            reference=c
+                        refc=re.sub(r"^(?:[HLN]|L:|H:|N:|FLAG:?)\s*[:=-]?\s*", "", c, flags=re.I)
+                        if not reference and re.fullmatch(range_re,refc,re.I):
+                            reference=refc.replace(" ","")
                         elif not unit:
                             unit=norm_unit(c)
                     if add_test(name,result,unit,reference):
@@ -357,6 +358,12 @@ def _parse_tests(readings):
                 result=m.group(2)
                 unit,reference=parse_remainder(m.group(3))
                 add_test(name,result,unit,reference)
+
+    # Normalize analyzer flag prefixes that may survive OCR parsing.
+    for t in tests:
+        rr=_clean_line(t.get("reference_range",""))
+        rr=re.sub(r"^(?:[HLN]|FLAG)\s*:\s*", "", rr, flags=re.I)
+        t["reference_range"]=rr.replace(" ","")
 
     # Merge OCR variants by normalized test name. Prefer the candidate
     # with a clean numeric result, recognizable unit and reference range.
