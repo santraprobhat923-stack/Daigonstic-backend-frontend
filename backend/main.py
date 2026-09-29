@@ -322,8 +322,16 @@ def settings_get(c=Depends(current),db:Session=Depends(get_db)):
         layout={}
     return {"whatsapp_enabled":c.whatsapp_enabled,"upi_id":c.upi_id,"credits":c.credits,"credit_price_inr":float(system_setting(db,"credit_price_inr",str(CREDIT_PRICE_INR))),"whatsapp_provider":WHATSAPP_PROVIDER,"payment_template":WHATSAPP_PAYMENT_TEMPLATE,"report_template":WHATSAPP_REPORT_TEMPLATE,"report_layout":layout}
 @app.put("/api/settings")
-def settings_save(whatsapp_enabled:bool=Form(...),upi_id:str=Form(""),c=Depends(current),db:Session=Depends(get_db)):
-    c.whatsapp_enabled=whatsapp_enabled; c.upi_id=upi_id.strip(); db.commit(); return {"ok":True}
+def settings_save(whatsapp_enabled:bool=Form(...),upi_id:str=Form(""),report_layout:str=Form("{}"),c=Depends(current),db:Session=Depends(get_db)):
+    try:
+        json.loads(report_layout or "{}")
+    except Exception:
+        raise HTTPException(400,"Invalid report layout")
+    c.whatsapp_enabled=whatsapp_enabled
+    c.upi_id=upi_id.strip()
+    c.report_layout=report_layout or "{}"
+    db.commit()
+    return {"ok":True}
 @app.post("/api/settings/template")
 def template(file:UploadFile=File(...),c=Depends(current),db:Session=Depends(get_db)):
     if not (file.filename or "").lower().endswith(".pdf"): raise HTTPException(400,"Template must be PDF")
