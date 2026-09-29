@@ -432,7 +432,11 @@ def queue_wa(db,centre,report,kind,payload):
     db.add(WAJob(centre_id=centre.id,report_id=report.id,kind=kind,payload=json.dumps(payload)))
 
 def make_pdf(centre,report,data,out):
-    make_pdf_body_on_template(centre.template_path, data, out)
+    try:
+        layout=json.loads(centre.report_layout or "{}")
+    except Exception:
+        layout={}
+    make_pdf_body_on_template(centre.template_path, data, out, layout)
 
 def report_dict(r):
     return {
