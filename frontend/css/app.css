@@ -187,7 +187,7 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}
 
 /* Responsive report designer viewport — 30 Sep 2026 */
 .report-preview-viewport{width:100%;max-width:100%;min-width:0;overflow:hidden;position:relative;padding:16px}
-.visual-report-page{flex:0 0 auto;transform-origin:top center;will-change:transform}
+.visual-report-page{flex:0 0 auto;transform-origin:top left;will-change:transform}
 @media(max-width:900px){
   .designer-grid{grid-template-columns:1fr;min-width:0}
   .designer-grid>div{min-width:0;max-width:100%}
