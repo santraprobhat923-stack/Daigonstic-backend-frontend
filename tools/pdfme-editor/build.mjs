@@ -4,6 +4,11 @@ import { fileURLToPath } from "node:url";
 
 const root = dirname(fileURLToPath(import.meta.url));
 const clawpdfBrowser = resolve(root, "node_modules/clawpdf/dist/browser.js");
+const shims = {
+  "node:zlib": resolve(root, "shims/node-zlib.js"),
+  "node:url": resolve(root, "shims/node-url.js"),
+  "node:module": resolve(root, "shims/node-module.js"),
+};
 
 await build({
   entryPoints: ["entry.js"],
@@ -16,11 +21,10 @@ await build({
   sourcemap: false,
   legalComments: "none",
   plugins: [{
-    name: "clawpdf-browser",
+    name: "browser-node-shims",
     setup(build) {
-      build.onResolve({ filter: /^clawpdf$/ }, () => ({
-        path: clawpdfBrowser,
-      }));
+      build.onResolve({ filter: /^clawpdf$/ }, () => ({ path: clawpdfBrowser }));
+      build.onResolve({ filter: /^node:(zlib|url|module)$/ }, ({ path }) => ({ path: shims[path] }));
     },
   }],
   loader: {
