@@ -27,10 +27,9 @@ async function loadBasePdf(){
 async function init(){
   try{
     show("Loading master template…",true);
-    const [{Designer},{text,image,signature,table},{},settings]=await Promise.all([
-      import("/pdfme/@pdfme/ui@6.1.12?bundle"),
-      import("/pdfme/@pdfme/schemas@6.1.12?bundle"),
-      import("/pdfme/@pdfme/common@6.1.12?bundle"),
+    const [{Designer},{text,image,signature,table},settings]=await Promise.all([
+      import("/pdfme/@pdfme/ui@6.1.12?standalone&target=es2022"),
+      import("/pdfme/@pdfme/schemas@6.1.12?standalone&target=es2022"),
       api("/api/settings")
     ]);
     currentSettings=settings;
