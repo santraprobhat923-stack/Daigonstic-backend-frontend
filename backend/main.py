@@ -82,9 +82,13 @@ def pdfme_asset(asset_path:str,request:Request):
     body=response.content
     ctype=response.headers.get("content-type","").lower()
     if "javascript" in ctype or asset_path.endswith((".js",".mjs")):
-        import re as _re
-        # Rewrite every root-relative pdfme/node import to the local proxy.
-        body=_re.sub(rb'([\\\"\\\'])/(?:@pdfme|node)/',rb'\\1/pdfme/\\g<0>'.replace(b'\\g<0>',b''),body)
+        # Rewrite only root-relative pdfme/node imports to the local proxy.
+        # Keep this as explicit byte replacements; a regex replacement here is
+        # unnecessarily fragile and can crash Python's re template parser.
+        body=body.replace(b'"/@pdfme/',b'"/pdfme/@pdfme/')
+        body=body.replace(b"'/@pdfme/",b"'/pdfme/@pdfme/")
+        body=body.replace(b'"/node/',b'"/pdfme/node/')
+        body=body.replace(b"'/node/",b"'/pdfme/node/")
         # Also rewrite absolute esm.sh module URLs that appear in generated
         # wrappers/bundles.
         body=body.replace(b"https://esm.sh/",b"/pdfme/")
