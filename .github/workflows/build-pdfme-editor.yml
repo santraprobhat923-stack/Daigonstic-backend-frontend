@@ -39,12 +39,7 @@ jobs:
       - name: Verify bundle
         run: |
           test -s frontend/pdfme-bundle/designer.js
-          if grep -Eq '@pdfme/|from "buffer"|from "process"|from "node:' frontend/pdfme-bundle/designer.js; then
-            echo "Unresolved bare module import found in bundle"
-            echo "Bare import detected; build must be fixed before deployment."
-            exit 1
-          fi
-
+          node -e 'const fs=require("fs"); const s=fs.readFileSync("frontend/pdfme-bundle/designer.js","utf8"); if (s.includes("node:") || s.includes("@pdfme/") || s.includes("from \"buffer\"") || s.includes("from \"process\"")) process.exit(1);'
       - name: Commit generated bundle
         run: |
           git config user.name "github-actions[bot]"
