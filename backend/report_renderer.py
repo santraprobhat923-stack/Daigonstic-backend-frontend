@@ -140,7 +140,8 @@ def _metrics(layout):
     right = max(12, float(page.get("right", 52)))
     top = max(24, float(page.get("top", 132)))
     bottom = max(24, float(page.get("bottom", 82)))
-    return left, right, PAGE_H - top, bottom
+    _, page_h = _page_size(layout)
+    return left, right, page_h - top, bottom
 
 
 def _safe_text(value):
@@ -426,17 +427,29 @@ def _result_table(title, rows, layout, styles, available_width):
             results.get("section_background"),
             colors.HexColor("#ECEAFB"),
         )
+        section_style = ParagraphStyle(
+            "section_dynamic",
+            parent=styles["section"],
+            fontName=_font_name(layout, bold=bool(results.get("section_bold", True))),
+            fontSize=float(results.get("section_font_size", 7.9)),
+            leading=float(results.get("section_font_size", 7.9)) + 1,
+            textColor=_color(results.get("section_text"), colors.black),
+            alignment={"left": TA_LEFT, "center": TA_CENTER, "right": 2}.get(
+                str(results.get("section_align", "left")).lower(), TA_LEFT
+            ),
+        )
+        pad = max(2, float(results.get("section_padding", 5)))
         section_header = [
             Table(
-                [[Paragraph(str(title).upper(), styles["section"])]],
+                [[Paragraph(str(title).upper(), section_style)]],
                 colWidths=[available_width],
                 hAlign="LEFT",
                 style=TableStyle([
                     ("BACKGROUND", (0, 0), (-1, -1), section_bg),
                     ("LEFTPADDING", (0, 0), (-1, -1), 9),
                     ("RIGHTPADDING", (0, 0), (-1, -1), 9),
-                    ("TOPPADDING", (0, 0), (-1, -1), 5),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                    ("TOPPADDING", (0, 0), (-1, -1), pad),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), pad),
                 ]),
             ),
             Spacer(1, 4),
@@ -494,7 +507,7 @@ class _PageCountCanvas(canvas.Canvas):
         self.setFillColor(text)
         self.setFont(_font_name(self._aarogyam_layout), 7)
         self.drawRightString(
-            PAGE_W - right,
+            _page_size(self._aarogyam_layout)[0] - right,
             max(10, bottom - 18),
             f"Page {self._pageNumber} of {total}",
         )
