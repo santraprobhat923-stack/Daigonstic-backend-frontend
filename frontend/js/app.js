@@ -186,7 +186,7 @@ async function reportDesigner(){
             <div class="field"><label>RIGHT</label><input id="layoutRight" type="number" value="${esc(gv("right",52))}" oninput="updateDesignerPreview()"></div>
           </div>
           <div class="inspector-actions">
-            <input id="tplDesigner" type="file" accept=".pdf,image/png,image/jpeg,image/webp" hidden onchange="uploadTemplateFromDesigner(this)">
+            <input id="tplDesigner" type="file" accept=".pdf,.doc,.docx,image/png,image/jpeg,image/webp" hidden onchange="uploadTemplateFromDesigner(this)">
             <button type="button" onclick="document.getElementById('tplDesigner').click()">Upload / replace letterhead</button>
             <button type="button" onclick="clearTemplatePreview()">Remove letterhead</button>
           </div>
@@ -245,7 +245,7 @@ async function reportDesigner(){
         <div class="stage-toolbar"><div><span class="eyebrow">Canvas</span><b id="designerPreviewTitle">Master report page</b></div><span class="canvas-badge">LIVE</span></div>
         <div id="reportPreviewViewport" class="report-preview-viewport">
           <div id="reportPreviewPage" class="visual-report-page master-canvas">
-            <div id="previewLetterhead" class="preview-letterhead"><span>LETTERHEAD / STATIC BACKGROUND</span></div>
+            <div id="previewLetterhead" class="preview-letterhead"><iframe id="previewLetterheadFrame" title="Uploaded letterhead preview"></iframe></div>
             <div class="master-block preview-manual-header" data-block="header"><span id="previewHeaderText"></span></div>
             <div class="master-block preview-patient-block" data-block="patient">
               <div class="block-tag">PATIENT CREDENTIALS</div>
@@ -270,7 +270,7 @@ function setDesignerMode(mode){
   const el=document.getElementById("designerMode");if(el)el.value=mode;
   document.querySelectorAll(".designer-mode-switch button").forEach(b=>b.classList.toggle("active",b.dataset.mode===mode));
   const letter=document.getElementById("previewLetterhead"), manual=document.querySelector(".preview-manual-header");
-  if(letter)letter.style.display=mode==="template"?"flex":"none";
+  if(letter)letter.style.display=mode==="template"?"block":"none";
   if(manual)manual.style.display=mode==="manual"?"block":"none";
   updateDesignerPreview();
 }
@@ -305,6 +305,21 @@ function updateDesignerPreview(){
   }
   page.dataset.pageSize=document.getElementById("layoutPageSize")?.value||"A4";
   requestReportPreviewScale();
+}
+
+async function loadLetterheadPreview(){
+  const frame=document.getElementById("previewLetterheadFrame");
+  if(!frame)return;
+  try{
+    const r=await fetch("/api/settings/template?preview="+Date.now(),{credentials:"same-origin"});
+    if(!r.ok){frame.removeAttribute("src");return;}
+    const blob=await r.blob();
+    const url=URL.createObjectURL(blob);
+    const old=frame.dataset.objectUrl;
+    if(old)URL.revokeObjectURL(old);
+    frame.dataset.objectUrl=url;
+    frame.src=url;
+  }catch(e){console.warn("Letterhead preview unavailable",e)}
 }
 
 function setDesignerModeVisual(mode){
@@ -381,7 +396,7 @@ async function uploadTemplateFromDesigner(input){
   const f=new FormData();f.append("file",input.files[0]);
   try{
     await api("/api/settings/template",{method:"POST",body:f});
-    alert("Letterhead template saved. Future reports will use it as the static page background.");
+    alert("Letterhead template saved. The uploaded page will now appear in the live preview.");\n    updateDesignerPreview();
   }catch(e){alert(e.message)}
 }
 
@@ -426,7 +441,7 @@ async function saveReportLayout(){
 }
 
 async function saveSettings(){try{await api("/api/settings",{method:"PUT",body:new URLSearchParams({whatsapp_enabled:document.getElementById("wa").value,upi_id:document.getElementById("upi").value})});alert("Settings saved");await settings()}catch(e){alert(e.message)}}
-async function uploadTemplate(){const el=document.getElementById("tpl");if(!el.files[0])return alert("Choose a PDF or image template");const f=new FormData();f.append("file",el.files[0]);try{await api("/api/settings/template",{method:"POST",body:f});alert("Template saved. Future generated reports will use it as the static letterhead.");await settings()}catch(e){alert(e.message)}}
+async function uploadTemplate(){const el=document.getElementById("tpl");if(!el.files[0])return alert("Choose a PDF, Word document, or image template");const f=new FormData();f.append("file",el.files[0]);try{await api("/api/settings/template",{method:"POST",body:f});alert("Template saved. Future generated reports will use it as the static letterhead.");await settings()}catch(e){alert(e.message)}}
 window.addEventListener("error",e=>{showError(e.error||e.message||"Aarogyam could not start")});
 window.addEventListener("unhandledrejection",e=>{showError(e.reason||"Unexpected error")});
 function startAarogyam(){try{if(!app)throw Error("Application shell not found");boot().catch(showError)}catch(e){showError(e)}}
