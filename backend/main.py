@@ -56,8 +56,13 @@ def pdfme_asset(asset_path:str,request:Request):
         response.raise_for_status()
     except Exception as e:
         raise HTTPException(502,f"Could not load pdfme asset: {e}")
-    media=response.headers.get("content-type","application/javascript")
-    return Response(content=response.content,media_type=media)
+    body=response.content
+    # Keep pdfme's nested ES-module imports and worker assets on Aarogyam's
+    # own origin. Browsers otherwise reject the worker when it comes from esm.sh.
+    if "javascript" in response.headers.get("content-type","").lower() or asset_path.endswith((".js",".mjs")):
+        body=body.replace(b"https://esm.sh/",b"/pdfme/")
+    media=response.headers.get("content-type","application/javascript").split(";")[0]
+    return Response(content=body,media_type=media,headers={"Cache-Control":"public, max-age=3600"})
 app.include_router(superadmin_router)
 @app.on_event("startup")
 def startup():
