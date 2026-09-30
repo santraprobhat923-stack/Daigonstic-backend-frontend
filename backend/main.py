@@ -63,6 +63,12 @@ def superadmin_home():
     index_path=Path("frontend/superadmin.html")
     if not index_path.is_file(): raise HTTPException(500,"Super Admin frontend not found")
     return HTMLResponse(index_path.read_text(encoding="utf-8"))
+@app.get("/template-designer")
+def template_designer():
+    index_path=Path("frontend/pdfme-designer.html")
+    if not index_path.is_file():
+        raise HTTPException(500,"Template designer frontend not found")
+    return HTMLResponse(index_path.read_text(encoding="utf-8"))
 @app.get("/")
 def home():
     # Read the HTML directly instead of FileResponse. This avoids a Content-Length
