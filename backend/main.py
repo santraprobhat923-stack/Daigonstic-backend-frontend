@@ -514,7 +514,12 @@ def pdfme_dependency(dependency_path:str,request:Request):
         raise HTTPException(404,"Not found")
 
     query=("?"+request.url.query) if request.url.query else ""
-    url="https://esm.sh/"+path+query
+    if path == "npm/base64-js@1.5.1/+esm":
+        url="https://cdn.jsdelivr.net/npm/base64-js@1.5.1/+esm"
+    elif path == "npm/ieee754@1.2.1/+esm":
+        url="https://cdn.jsdelivr.net/npm/ieee754@1.2.1/+esm"
+    else:
+        url="https://esm.sh/"+path+query
     try:
         response=_requests.get(url,timeout=30,headers={"User-Agent":"Aarogyam-pdfme-proxy/1.0"})
         response.raise_for_status()
