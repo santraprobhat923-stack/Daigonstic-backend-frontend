@@ -315,16 +315,10 @@ function clearTemplatePreview(){
 
 async function applyReportPreset(key){
   const presets={clinical:{patientBg:"#F6F8FB",sectionBg:"#EEF3F8",tableBg:"#F8FAFC",text:"#172033",accent:"#285F8F",font:"Helvetica",patientStyle:"card"},modern:{patientBg:"#F6F7FC",sectionBg:"#F0EEFF",tableBg:"#FAFAFD",text:"#151A2D",accent:"#5F52E8",font:"Helvetica",patientStyle:"card"},minimal:{patientBg:"#FFFFFF",sectionBg:"#F5F6F8",tableBg:"#FBFBFC",text:"#20242D",accent:"#52606D",font:"Helvetica",patientStyle:"plain"}};
-  const p=presets[key]; if(!p)return;
-  document.getElementById("layoutPatientBg").value=p.patientBg;
-  document.getElementById("layoutSectionBg").value=p.sectionBg;
-  document.getElementById("layoutTableBg").value=p.tableBg;
-  document.getElementById("layoutText").value=p.text;
-  document.getElementById("layoutAccent").value=p.accent;
-  document.getElementById("layoutFont").value=p.font;
-  document.getElementById("layoutPatientStyle").value=p.patientStyle;
-  document.querySelectorAll(".preset-card").forEach(x=>x.classList.remove("selected"));
-  document.querySelectorAll(".preset-card").forEach(x=>{if(x.textContent.includes(key==="clinical"?"Clinical Classic":key==="modern"?"Modern Clean":"Minimal"))x.classList.add("selected")});
+  const p=presets[key];if(!p)return;
+  const set=(id,v)=>{const e=document.getElementById(id);if(e)e.value=v};
+  set("layoutPatientBg",p.patientBg);set("layoutSectionBg",p.sectionBg);set("layoutTableBg",p.tableBg);set("layoutSectionText",p.text);set("layoutFont",p.font);set("layoutPatientStyle",p.patientStyle);set("layoutSectionAlign","left");
+  updateDesignerPreview();
 }
 
 async function saveReportLayout(){
@@ -334,18 +328,20 @@ async function saveReportLayout(){
   if(!visible.includes("name"))visible.unshift("name");
   if(!columns.includes("name"))columns.unshift("name");
   const order=document.getElementById("layoutPatientOrder").value.split(",").map(x=>x.trim()).filter(Boolean);
+  const sectionOrder=[...document.querySelectorAll("#sectionOrderList [data-section]")].map(x=>x.dataset.section);
   const layout={
-    page:{left:Number(document.getElementById("layoutLeft").value),right:Number(document.getElementById("layoutRight").value),top:Number(document.getElementById("layoutTop").value),bottom:Number(document.getElementById("layoutBottom").value)},
+    page:{size:document.getElementById("layoutPageSize").value,left:Number(document.getElementById("layoutLeft").value),right:Number(document.getElementById("layoutRight").value),top:Number(document.getElementById("layoutTop").value),bottom:Number(document.getElementById("layoutBottom").value)},
     patient:{visible,order,columns:Number(document.getElementById("layoutPatientColumns").value),style:document.getElementById("layoutPatientStyle").value,font_size:Number(document.getElementById("layoutPatientSize").value),label_bold:true,background:document.getElementById("layoutPatientBg").value,border:"#E1E5EC"},
-    results:{columns,section_headers:document.getElementById("layoutSectionHeaders").checked,section_background:document.getElementById("layoutSectionBg").value,table_header_background:document.getElementById("layoutTableBg").value,row_alt_background:"#FBFCFE",font_size:Number(document.getElementById("layoutResultSize").value),header_size:7.2,show_grid:document.getElementById("layoutGrid").checked},
-    appearance:{text:document.getElementById("layoutText").value,accent:document.getElementById("layoutAccent").value,muted:"#667085",font:document.getElementById("layoutFont").value}
+    results:{columns,section_order:sectionOrder,section_headers:document.getElementById("layoutSectionHeaders").checked,section_align:document.getElementById("layoutSectionAlign").value,section_bold:document.getElementById("layoutSectionBold").checked,section_font_size:Number(document.getElementById("layoutSectionSize").value),section_text:document.getElementById("layoutSectionText").value,section_background:document.getElementById("layoutSectionBg").value,section_padding:Number(document.getElementById("layoutSectionPadding").value),table_header_background:document.getElementById("layoutTableBg").value,row_alt_background:"#FBFCFE",font_size:Number(document.getElementById("layoutResultSize").value),header_size:7.2,show_grid:document.getElementById("layoutGrid").checked},
+    appearance:{text:document.getElementById("layoutSectionText").value,accent:document.getElementById("layoutSectionText").value,muted:"#667085",font:document.getElementById("layoutFont").value},
+    manual:{header_text:document.getElementById("manualHeaderText").value,footer_text:document.getElementById("manualFooterText").value,text_color:document.getElementById("manualTextColour").value}
   };
   try{
     await api("/api/settings",{method:"PUT",body:new URLSearchParams({whatsapp_enabled:""+current.whatsapp_enabled,upi_id:current.upi_id||"",report_layout:JSON.stringify(layout)})});
-    alert("Professional report design saved. New PDFs will use it.");
-    await settings();
+    alert("Report design saved. New PDFs will use the saved layout.");
   }catch(e){alert(e.message)}
 }
+
 
 async function saveSettings(){try{await api("/api/settings",{method:"PUT",body:new URLSearchParams({whatsapp_enabled:document.getElementById("wa").value,upi_id:document.getElementById("upi").value})});alert("Settings saved");await settings()}catch(e){alert(e.message)}}
 async function uploadTemplate(){const el=document.getElementById("tpl");if(!el.files[0])return alert("Choose a PDF");const f=new FormData();f.append("file",el.files[0]);try{await api("/api/settings/template",{method:"POST",body:f});alert("Template saved. Future generated reports will use it.");await settings()}catch(e){alert(e.message)}}
