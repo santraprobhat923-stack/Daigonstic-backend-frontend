@@ -50,14 +50,27 @@ await copyFile(
 );
 
 // PDFMe/clawpdf uses a hashed worker JavaScript asset at runtime.
-// Keep that asset beside the generated bundle so import.meta.url resolves locally.
-const assetDir = resolve(clawpdfDist, "assets");
-const assetNames = await readdir(assetDir);
-const workerName = assetNames.find((name) => /^clawpdf-worker-.*\.js$/.test(name));
-if (!workerName) {
-  throw new Error("clawpdf render worker asset was not found in dist/assets");
+// Package layouts can differ between clawpdf releases, so locate the worker
+// recursively instead of assuming one fixed dist/assets directory.
+async function findWorker(dir) {
+  const entries = await readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = resolve(dir, entry.name);
+    if (entry.isFile() && /^clawpdf-worker-.*\\.js$/.test(entry.name)) return fullPath;
+    if (entry.isDirectory()) {
+      const found = await findWorker(fullPath);
+      if (found) return found;
+    }
+  }
+  return null;
 }
+
+const workerPath = await findWorker(clawpdfDist);
+if (!workerPath) {
+  throw new Error("clawpdf render worker asset was not found anywhere in node_modules/clawpdf");
+}
+const workerName = workerPath.split("/").pop();
 await mkdir(resolve(outDir, "assets"), { recursive: true });
-await copyFile(resolve(assetDir, workerName), resolve(outDir, "assets", workerName));
+await copyFile(workerPath, resolve(outDir, "assets", workerName));
 
 console.log("PDFMe production bundle created with render worker:", workerName);
