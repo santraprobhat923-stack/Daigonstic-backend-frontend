@@ -226,6 +226,10 @@ async function reportDesigner(){
 
         <div class="card">
           <div class="designer-section-head"><div><span class="designer-step">05</span><div><h3>Blank-page header & footer</h3><p class="muted">If no PDF template is uploaded, use these editable areas. Drag the blocks in the preview.</p></div></div></div>
+          <div class="template-preview-actions">
+            <input id="logoDesigner" type="file" accept="image/png,image/jpeg,image/webp" hidden onchange="uploadCentreLogo(this)">
+            <button type="button" onclick="document.getElementById('logoDesigner').click()">Add / replace logo</button>
+          </div>
           <div class="field"><label>HEADER TEXT</label><textarea id="manualHeaderText" rows="2" placeholder="Centre name • address • phone • email" oninput="updateDesignerPreview()">${esc(l.manual?.header_text||"")}</textarea></div>
           <div class="field"><label>FOOTER TEXT</label><textarea id="manualFooterText" rows="2" placeholder="Address • contact • doctor / authorised signatory" oninput="updateDesignerPreview()">${esc(l.manual?.footer_text||"")}</textarea></div>
           <div class="field"><label>HEADER / FOOTER TEXT COLOUR</label><input id="manualTextColour" type="color" value="${esc(l.manual?.text_color||"#52606D")}" oninput="updateDesignerPreview()"></div>
@@ -254,6 +258,7 @@ async function reportDesigner(){
   </div>`);
   setupSectionDragDrop();
   await refreshReportTemplatePreview();
+  await refreshCentreLogoPreview();
   updateDesignerPreview();
 }
 
@@ -287,6 +292,34 @@ function setupSectionDragDrop(){
     row.addEventListener("dragend",()=>{row.classList.remove("dragging");dragging=null;updateDesignerPreview()});
     row.addEventListener("dragover",e=>{e.preventDefault();if(dragging&&dragging!==row){const rect=row.getBoundingClientRect();if(e.clientY<rect.top+rect.height/2)list.insertBefore(dragging,row);else list.insertBefore(dragging,row.nextSibling)}});
   });
+}
+
+async function uploadCentreLogo(input){
+  if(!input.files[0])return;
+  const f=new FormData();f.append("file",input.files[0]);
+  try{
+    await api("/api/settings/logo",{method:"POST",body:f});
+    await refreshCentreLogoPreview();
+    alert("Centre logo saved.");
+  }catch(e){alert(e.message)}
+}
+
+async function refreshCentreLogoPreview(){
+  const overlay=document.getElementById("previewOverlay");if(!overlay)return;
+  try{
+    const res=await fetch("/api/settings/logo",{headers:{Authorization:"Bearer "+token}});
+    if(!res.ok)return;
+    const blob=await res.blob();
+    if(window._aarogyamLogoUrl)URL.revokeObjectURL(window._aarogyamLogoUrl);
+    window._aarogyamLogoUrl=URL.createObjectURL(blob);
+    let img=document.getElementById("previewCentreLogo");
+    if(!img){
+      img=document.createElement("img");img.id="previewCentreLogo";img.className="preview-centre-logo";
+      img.draggable=true;img.title="Drag logo in preview";
+      overlay.appendChild(img);
+    }
+    img.src=window._aarogyamLogoUrl;
+  }catch(e){}
 }
 
 async function refreshReportTemplatePreview(){
