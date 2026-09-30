@@ -9,5 +9,6 @@
   },
   "devDependencies": {
     "esbuild": "0.25.9"
-  }
+  },
+  "description": "Builds the self-contained Aarogyam PDFMe template editor bundle"
 }
