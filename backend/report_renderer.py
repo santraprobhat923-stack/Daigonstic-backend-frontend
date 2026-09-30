@@ -469,7 +469,7 @@ def _group_tests(tests, layout=None):
     groups = {}
     discovered = []
     for test in tests or []:
-        section = str(test.get("section") or "Examination Results").strip()
+        section = str(test.get("section") or "Unclassified Results").strip()
         if section not in groups:
             groups[section] = []
             discovered.append(section)
