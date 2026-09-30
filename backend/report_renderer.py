@@ -131,7 +131,13 @@ def _font_name(layout, bold=False, italic=False):
 
 
 def _page_size(layout):
-    key = str(layout.get("page", {}).get("size", "A4")).upper()
+    page = layout.get("page", {})
+    if page.get("width") and page.get("height"):
+        try:
+            return float(page["width"]), float(page["height"])
+        except Exception:
+            pass
+    key = str(page.get("size", "A4")).upper()
     return PAGE_SIZES.get(key, A4)
 
 
@@ -650,31 +656,34 @@ def make_pdf_body_on_template(template_path, data, out, layout=None):
     Generate the dynamic multi-page report body and overlay it on the
     centre's uploaded PDF template.
 
-    A single-page letterhead is repeated for overflow pages. If the template
-    has multiple pages, its pages are used in order and the last template
-    page is repeated for any additional report pages.
+    When a centre template exists, its first-page dimensions become the
+    report page dimensions so the body cannot drift because of a different
+    designer page-size selection.
     """
     effective_layout = _merge_layout(layout)
+    base = None
     if template_path and Path(template_path).exists():
+        base = PdfReader(template_path)
+        if not base.pages:
+            raise ValueError("Centre template PDF has no pages")
+        box = base.pages[0].mediabox
+        effective_layout["page"]["width"] = float(box.width)
+        effective_layout["page"]["height"] = float(box.height)
         effective_layout["manual"] = {}
+
     body = render_body(data, effective_layout)
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    if template_path and Path(template_path).exists():
-        base = PdfReader(template_path)
+    if base is not None:
         overlay = PdfReader(body)
         writer = PdfWriter()
-
-        if not base.pages:
-            raise ValueError("Centre template PDF has no pages")
-
         for index, overlay_page in enumerate(overlay.pages):
             base_page = base.pages[index] if index < len(base.pages) else base.pages[-1]
             page = base_page
             page.merge_page(overlay_page)
             writer.add_page(page)
-
         with open(out, "wb") as f:
             writer.write(f)
     else:
         out.write_bytes(body.read())
+
