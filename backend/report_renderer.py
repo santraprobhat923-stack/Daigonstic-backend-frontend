@@ -302,7 +302,6 @@ def _patient_block(patient, layout, styles, available_width):
         style_cmds += [
             ("BACKGROUND", (0, 0), (-1, -1), bg),
             ("BOX", (0, 0), (-1, -1), 0.7, border),
-            ("ROUNDEDCORNERS", [6, 6, 6, 6]),
         ]
 
     outer = Table(
@@ -448,6 +447,7 @@ def _group_tests(tests):
 class _ReportDocTemplate(BaseDocTemplate):
     def __init__(self, stream, layout, **kwargs):
         left, right, top, bottom = _metrics(layout)
+        self._layout = layout
         frame = Frame(
             left,
             bottom,
@@ -483,10 +483,6 @@ class _ReportDocTemplate(BaseDocTemplate):
         canv.setFont(font, size)
         canv.drawRightString(PAGE_W - right, max(10, bottom - 18), f"Page {doc.page}")
         canv.restoreState()
-
-    def build_report(self, story):
-        self._layout = self._report_layout
-        self.build(story)
 
 
 def _build_story(data, layout, available_width):
@@ -566,7 +562,6 @@ def render_body(data, layout=None):
         title="Aarogyam Laboratory Report",
         author="Aarogyam",
     )
-    doc._report_layout = layout
     story = _build_story(data, layout, available_width)
     doc.build(story)
     body.seek(0)
