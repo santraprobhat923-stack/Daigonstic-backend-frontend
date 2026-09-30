@@ -8,6 +8,7 @@ from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 from reportlab.lib.pagesizes import A4, LETTER, LEGAL, A5
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.lib.utils import ImageReader
 from reportlab.platypus import (
     BaseDocTemplate,
     Frame,
@@ -507,6 +508,16 @@ class _PageCountCanvas(canvas.Canvas):
         manual_color = _color(manual.get("text_color"), colors.HexColor("#52606D"))
         self.setFillColor(manual_color)
         self.setFont(_font_name(layout), 7)
+        logo_path = Path(str(manual.get("logo_path") or ""))
+        if logo_path.exists():
+            try:
+                logo_w = min(110, float(manual.get("logo_width", 90)))
+                logo_h = min(70, float(manual.get("logo_height", 35)))
+                logo_x = float(manual.get("logo_x", right))
+                logo_y = page_h - float(manual.get("logo_y", 42)) - logo_h
+                self.drawImage(ImageReader(str(logo_path)), logo_x, logo_y, width=logo_w, height=logo_h, preserveAspectRatio=True, mask="auto", anchor="sw")
+            except Exception:
+                pass
         header = str(manual.get("header_text") or "").strip()
         footer = str(manual.get("footer_text") or "").strip()
         if header:
