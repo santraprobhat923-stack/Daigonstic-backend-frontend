@@ -50,26 +50,48 @@ app.mount("/superadmin-static",StaticFiles(directory="frontend"),name="superadmi
 @app.get("/@pdfme/{asset_path:path}")
 @app.get("/node/{asset_path:path}")
 def pdfme_asset(asset_path:str,request:Request):
+    """Serve pdfme's browser module graph through the Aarogyam origin.
+
+    esm.sh emits root-relative imports such as /@pdfme/common and /node/*.mjs.
+    Those must remain same-origin because pdfme also creates a PDF worker. We
+    deliberately proxy only the pdfme/node namespaces here; normal app routes
+    are untouched.
+    """
     import requests as _requests
+    from urllib.parse import unquote
+
+    asset_path=unquote(asset_path).lstrip("/")
     query=("?"+request.url.query) if request.url.query else ""
-    url="https://esm.sh/"+asset_path+query
+
+    # esm.sh's node/* endpoints are not consistently available. Use the browser
+    # ESM builds from jsDelivr for the two Node globals pdfme's dependency graph
+    # requests in the browser.
+    if asset_path == "node/buffer.mjs":
+        url="https://cdn.jsdelivr.net/npm/buffer@6.0.3/+esm"
+    elif asset_path == "node/process.mjs":
+        url="https://cdn.jsdelivr.net/npm/process@0.11.10/+esm"
+    else:
+        url="https://esm.sh/"+asset_path+query
+
     try:
-        response=_requests.get(url,timeout=30)
+        response=_requests.get(url,timeout=30,headers={"User-Agent":"Aarogyam-pdfme-proxy/1.0"})
         response.raise_for_status()
     except Exception as e:
         raise HTTPException(502,f"Could not load pdfme asset: {e}")
+
     body=response.content
-    # Keep pdfme's nested ES-module imports and worker assets on Aarogyam's
-    # own origin. Browsers otherwise reject the worker when it comes from esm.sh.
-    if "javascript" in response.headers.get("content-type","").lower() or asset_path.endswith((".js",".mjs")):
-        # esm.sh returns a module graph with root-relative imports. Rewrite every
-        # root-relative module/node asset into our proxy namespace so the browser
-        # never leaves the Aarogyam origin.
+    ctype=response.headers.get("content-type","").lower()
+    if "javascript" in ctype or asset_path.endswith((".js",".mjs")):
         import re as _re
-        body=_re.sub(rb'(?<=[\\\"\\\'])/(?:@pdfme|node)/',b'/pdfme/\\g<0>'.replace(b'\\g<0>',b''),body)
+        # Rewrite every root-relative pdfme/node import to the local proxy.
+        body=_re.sub(rb'([\\\"\\\'])/(?:@pdfme|node)/',rb'\\1/pdfme/\\g<0>'.replace(b'\\g<0>',b''),body)
+        # Also rewrite absolute esm.sh module URLs that appear in generated
+        # wrappers/bundles.
         body=body.replace(b"https://esm.sh/",b"/pdfme/")
         body=body.replace(b'from "/pdfme//',b'from "/pdfme/')
         body=body.replace(b'import "/pdfme//',b'import "/pdfme/')
+        body=body.replace(b'export * from "/pdfme//',b'export * from "/pdfme/')
+
     media=response.headers.get("content-type","application/javascript").split(";")[0]
     return Response(content=body,media_type=media,headers={"Cache-Control":"public, max-age=3600"})
 app.include_router(superadmin_router)
