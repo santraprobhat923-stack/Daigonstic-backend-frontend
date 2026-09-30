@@ -201,3 +201,6 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}
   .preview-toolbar h3{overflow-wrap:anywhere}
   .preview-note p{overflow-wrap:anywhere}
 }
+
+/* Dynamic master-template designer — 30 Sep 2026 */
+.dynamic-block-card{display:flex;flex-direction:column;gap:5px;padding:12px 14px;margin-top:12px;border:1px dashed #D7DCE5;border-radius:10px;background:#FAFBFC;font-size:13px}.dynamic-block-card b{font-size:13px}.dynamic-block-card span{color:#667085;line-height:1.45}.designer-help{line-height:1.45}
