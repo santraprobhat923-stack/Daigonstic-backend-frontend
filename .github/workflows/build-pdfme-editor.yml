@@ -53,5 +53,7 @@ jobs:
             echo "Bundle unchanged."
           else
             git commit -m "build: add self-contained PDFMe editor bundle"
+            git fetch origin pdfme-production-bundle
+            git rebase origin/pdfme-production-bundle
             git push
           fi
