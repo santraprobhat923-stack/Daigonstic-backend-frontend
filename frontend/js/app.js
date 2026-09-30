@@ -157,7 +157,9 @@ async function reportDesigner(){
   const resultDefs=[["name","Test / Parameter"],["value","Result"],["unit","Unit"],["reference_range","Reference Range"]];
   const pageSize=gv("size","A4");
   const sectionOrder=r.section_order||[];
-  const sectionNames=sectionOrder.length?sectionOrder:["Liver Function","Kidney Function","Thyroid Profile","Examination Results"];
+  // Section names are report data, not fixed designer presets. The designer
+  // controls only placement/style; actual test sections come from each report.
+  const sectionNames=sectionOrder.length?sectionOrder:["Test Type / Section"];
 
   app.innerHTML=shell(`
   <div class="wrap">
@@ -166,7 +168,7 @@ async function reportDesigner(){
       <div class="actions"><button onclick="settings()">Back</button><button class="primary" onclick="saveReportLayout()">Save design</button></div>
     </div>
 
-    <div class="card designer-live-banner"><span>●</span><div><b>Live preview</b><small>Uploaded letterhead and your report body are shown together when a centre template is available.</small></div><button onclick="refreshReportTemplatePreview()">Refresh preview</button></div>
+    <div class="card designer-live-banner"><span>●</span><div><b>Live preview</b><small>This preview shows the report layout you are editing. Actual test names and results are filled from each verified report.</small></div></div>
 
     <div class="designer-grid">
       <div>
@@ -241,23 +243,21 @@ async function reportDesigner(){
           <div class="preview-toolbar"><div><span class="eyebrow">Live preview</span><h3 id="designerPreviewTitle">Centre report page</h3></div><span class="preview-status">EDIT HERE</span></div>
           <div id="reportPreviewViewport" class="report-preview-viewport">
             <div id="reportPreviewPage" class="visual-report-page">
-              <iframe id="templateFrame" class="template-frame" title="Uploaded centre PDF template"></iframe>
               <div class="preview-overlay" id="previewOverlay">
                 <div class="manual-preview-header designer-block" draggable="true" data-block="header"><span id="previewHeaderText">Centre name • Address • Contact</span><button type="button" onclick="editPreviewText('manualHeaderText')">Edit</button></div>
-                <div class="preview-patient-pro"><b>PATIENT INFORMATION</b><div><span><small>PATIENT NAME</small>Sangeeta Verma</span><span><small>AGE / GENDER</small>32Y / F</span></div><div><span><small>PATIENT ID</small>AAR-00019</span><span><small>PHONE</small>98XXXXXX21</span></div></div>
-                <div class="preview-report-title"><small>LABORATORY REPORT</small><strong>BIOCHEMISTRY</strong></div>
+                <div class="preview-patient-pro"><b>PATIENT INFORMATION</b><div><span><small>PATIENT NAME</small>Patient Name</span><span><small>AGE / GENDER</small>Age / Gender</span></div><div><span><small>PATIENT ID</small>Patient ID</span><span><small>PHONE</small>Phone</span></div></div>
+                <div class="preview-report-title"><small>LABORATORY REPORT</small><strong>TEST TYPE</strong></div>
                 <div id="previewSections" class="preview-sections"></div>
                 <div class="manual-preview-footer designer-block" draggable="true" data-block="footer"><span id="previewFooterText">Address • Contact • Authorised Signatory</span><button type="button" onclick="editPreviewText('manualFooterText')">Edit</button></div>
               </div>
             </div>
           </div>
-          <div class="preview-note"><span>✓</span><p>With a centre PDF template, the original header/footer remains visible underneath this editable report-body preview. Without one, the blank page becomes the centre's own designed letterhead.</p></div>
+          <div class="preview-note"><span>✓</span><p>This is a clean layout preview only. It does not display an old uploaded report. When a real report is generated, its detected test types, parameters, results, units and reference ranges are placed into this saved layout.</p></div>
         </div>
       </div>
     </div>
   </div>`);
   setupSectionDragDrop();
-  await refreshReportTemplatePreview();
   await refreshCentreLogoPreview();
   updateDesignerPreview();
 }
@@ -272,9 +272,16 @@ function updateDesignerPreview(){
   const show=document.getElementById("layoutSectionHeaders")?.checked!==false;
   const list=document.getElementById("sectionOrderList");
   const names=list?[...list.querySelectorAll("[data-section]")].map(x=>x.dataset.section):[];
-  const sectionNames=names.length?names:["Liver Function","Kidney Function","Thyroid Profile"];
+  const sectionNames=names.length?names:["Test Type / Section"];
   const sections=document.getElementById("previewSections");
-  if(sections)sections.innerHTML=show?sectionNames.map((n,i)=>`<div class="preview-section-live" style="background:${bg};text-align:${align};padding:${pad}px 9px;color:${text};font-size:${size}px;font-weight:${bold?700:400}" draggable="true" data-section="${esc(n)}">${esc(n.toUpperCase())}</div><div class="preview-result-header"><span>TEST / PARAMETER</span><span>RESULT</span><span>UNIT</span><span>REFERENCE</span></div><div class="preview-result-row"><span>${i===0?"ALT":"TSH"}</span><strong>${i===0?"24":"2.10"}</strong><span>${i===0?"U/L":"µIU/mL"}</span><span>${i===0?"0–41":"0.4–4.0"}</span></div><div class="preview-result-row alt"><span>${i===0?"AST":"Free T4"}</span><strong>${i===0?"19":"1.24"}</strong><span>${i===0?"U/L":"ng/dL"}</span><span>${i===0?"0–40":"0.70–1.48"}</span></div>`).join(""):"";
+  if(sections){
+    sections.innerHTML=show?sectionNames.map(n=>`
+      <div class="preview-section-live" style="background:${bg};text-align:${align};padding:${pad}px 9px;color:${text};font-size:${size}px;font-weight:${bold?700:400}" draggable="true" data-section="${esc(n)}">${esc(n.toUpperCase())}</div>
+      <div class="preview-result-header"><span>TEST / PARAMETER</span><span>RESULT</span><span>UNIT</span><span>REFERENCE</span></div>
+      <div class="preview-result-row"><span>Test / Parameter</span><strong>Result</strong><span>Unit</span><span>Reference range</span></div>
+      <div class="preview-result-row alt"><span>Another parameter</span><strong>—</strong><span>—</span><span>—</span></div>
+    `).join(""):"";
+  }
   const header=document.getElementById("previewHeaderText"), footer=document.getElementById("previewFooterText");
   if(header)header.textContent=document.getElementById("manualHeaderText")?.value||"Centre name • Address • Contact";
   if(footer)footer.textContent=document.getElementById("manualFooterText")?.value||"Address • Contact • Authorised Signatory";
