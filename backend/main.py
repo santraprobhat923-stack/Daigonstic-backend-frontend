@@ -341,6 +341,35 @@ def template_preview(c=Depends(current)):
     p=Path(c.template_path or "")
     if not p.exists(): raise HTTPException(404,"No centre template uploaded")
     return FileResponse(p,media_type="application/pdf",filename="centre-template.pdf")
+@app.post("/api/settings/logo")
+def centre_logo(file:UploadFile=File(...),c=Depends(current),db:Session=Depends(get_db)):
+    if not (file.content_type or "").startswith("image/"):
+        raise HTTPException(400,"Logo must be an image")
+    suffix=Path(file.filename or ".png").suffix.lower() or ".png"
+    if suffix not in {".png",".jpg",".jpeg",".webp"}:
+        suffix=".png"
+    p=STORAGE_DIR/f"centre_{c.id}"/f"logo{suffix}"
+    p.parent.mkdir(parents=True,exist_ok=True)
+    p.write_bytes(file.file.read())
+    try:
+        layout=json.loads(c.report_layout or "{}")
+    except Exception:
+        layout={}
+    manual=layout.get("manual") if isinstance(layout.get("manual"),dict) else {}
+    manual["logo_path"]=str(p)
+    layout["manual"]=manual
+    c.report_layout=json.dumps(layout)
+    db.commit()
+    return {"ok":True,"url":"/api/settings/logo"}
+
+@app.get("/api/settings/logo")
+def centre_logo_preview(c=Depends(current)):
+    layout={}
+    try: layout=json.loads(c.report_layout or "{}")
+    except Exception: pass
+    p=Path((layout.get("manual") or {}).get("logo_path") or "")
+    if not p.exists(): raise HTTPException(404,"No centre logo uploaded")
+    return FileResponse(p,filename=p.name)
 @app.get("/api/notifications")
 def notifications(c=Depends(current),db:Session=Depends(get_db)):
     return [{"id":n.id,"kind":n.kind,"message":n.message,"created_at":n.created_at.isoformat()} for n in db.query(Notification).filter_by(centre_id=c.id).order_by(Notification.id.desc()).limit(100)]
