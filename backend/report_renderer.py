@@ -5,7 +5,7 @@ from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT, TA_CENTER
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, LETTER, LEGAL, A5
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import (
@@ -23,10 +23,12 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 from PyPDF2 import PdfReader, PdfWriter
 
 
+PAGE_SIZES = {"A4": A4, "A5": A5, "LETTER": LETTER, "LEGAL": LEGAL}
 PAGE_W, PAGE_H = A4
 
 DEFAULT_LAYOUT = {
     "page": {
+        "size": "A4",
         "left": 52,
         "right": 52,
         "top": 132,
@@ -50,6 +52,12 @@ DEFAULT_LAYOUT = {
     },
     "results": {
         "columns": ["name", "value", "unit", "reference_range"],
+        "section_order": [],
+        "section_align": "left",
+        "section_bold": true,
+        "section_font_size": 7.9,
+        "section_text": "#151A2D",
+        "section_padding": 5,
         "section_headers": True,
         "section_background": "#ECEAFB",
         "table_header_background": "#F7F7FA",
@@ -119,6 +127,11 @@ def _font_name(layout, bold=False, italic=False):
             "Courier": "Courier-Oblique",
         }[base]
     return base
+
+
+def _page_size(layout):
+    key = str(layout.get("page", {}).get("size", "A4")).upper()
+    return PAGE_SIZES.get(key, A4)
 
 
 def _metrics(layout):
@@ -432,17 +445,25 @@ def _result_table(title, rows, layout, styles, available_width):
     return section_header + [table, Spacer(1, 9)]
 
 
-def _group_tests(tests):
+def _group_tests(tests, layout=None):
     groups = {}
-    order = []
+    discovered = []
     for test in tests or []:
         section = str(test.get("section") or "Examination Results").strip()
         if section not in groups:
             groups[section] = []
-            order.append(section)
+            discovered.append(section)
         groups[section].append(test)
+    configured = list((layout or {}).get("results", {}).get("section_order") or [])
+    order = []
+    for wanted in configured:
+        wanted = str(wanted).strip()
+        if wanted and wanted in groups and wanted not in order:
+            order.append(wanted)
+    for section in discovered:
+        if section not in order:
+            order.append(section)
     return [(name, groups[name]) for name in order]
-
 
 class _PageCountCanvas(canvas.Canvas):
     """Canvas that writes Page X of Y after the full document is known."""
@@ -487,7 +508,7 @@ class _ReportDocTemplate(BaseDocTemplate):
         frame = Frame(
             left,
             bottom,
-            PAGE_W - left - right,
+            _page_size(layout)[0] - left - right,
             top - bottom,
             id="report_body",
             leftPadding=0,
@@ -495,7 +516,8 @@ class _ReportDocTemplate(BaseDocTemplate):
             topPadding=0,
             bottomPadding=0,
         )
-        super().__init__(stream, pagesize=A4, **kwargs)
+        self._pagesize = _page_size(layout)
+        super().__init__(stream, pagesize=self._pagesize, **kwargs)
         self.addPageTemplates([
             PageTemplate(
                 id="report",
@@ -543,7 +565,7 @@ def _build_story(data, layout, available_width):
     story.append(Spacer(1, 8))
 
     tests = data.get("tests") or []
-    for section, rows in _group_tests(tests):
+    for section, rows in _group_tests(tests, layout):
         story.extend(_result_table(section, rows, layout, styles, available_width))
 
     if not tests:
@@ -569,7 +591,7 @@ def render_body(data, layout=None):
     layout = _merge_layout(layout)
     body = BytesIO()
     left, right, _, _ = _metrics(layout)
-    available_width = PAGE_W - left - right
+    available_width = _page_size(layout)[0] - left - right
 
     doc = _ReportDocTemplate(
         body,
