@@ -334,8 +334,45 @@ def settings_save(whatsapp_enabled:bool=Form(...),upi_id:str=Form(""),report_lay
     return {"ok":True}
 @app.post("/api/settings/template")
 def template(file:UploadFile=File(...),c=Depends(current),db:Session=Depends(get_db)):
-    if not (file.filename or "").lower().endswith(".pdf"): raise HTTPException(400,"Template must be PDF")
-    p=STORAGE_DIR/f"centre_{c.id}"/"template.pdf"; p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(file.file.read()); c.template_path=str(p); db.commit(); return {"ok":True}
+    name=(file.filename or "").lower()
+    if not (name.endswith(".pdf") or name.endswith((".png",".jpg",".jpeg",".webp"))):
+        raise HTTPException(400,"Template must be a PDF or image (PNG/JPG/WEBP)")
+    p=STORAGE_DIR/f"centre_{c.id}"/"template.pdf"
+    p.parent.mkdir(parents=True,exist_ok=True)
+    raw=file.file.read()
+    if name.endswith(".pdf"):
+        p.write_bytes(raw)
+    else:
+        try:
+            from io import BytesIO
+            from PIL import Image
+            image=Image.open(BytesIO(raw))
+            if image.mode in ("RGBA","LA","P"):
+                bg=Image.new("RGB",image.size,"white")
+                if image.mode in ("RGBA","LA"):
+                    bg.paste(image,mask=image.getchannel("A"))
+                else:
+                    bg.paste(image)
+                image=bg
+            else:
+                image=image.convert("RGB")
+            image.save(p,"PDF",resolution=72.0)
+        except Exception as e:
+            raise HTTPException(400,f"Could not convert image template: {e}")
+    c.template_path=str(p)
+    db.commit()
+    return {"ok":True,"mode":"template","filename":file.filename}
+
+@app.delete("/api/settings/template")
+def delete_template(c=Depends(current),db:Session=Depends(get_db)):
+    p=Path(c.template_path or "")
+    if p.exists() and p.is_file():
+        try: p.unlink()
+        except Exception: pass
+    c.template_path=""
+    db.commit()
+    return {"ok":True,"mode":"manual"}
+
 @app.get("/api/settings/template")
 def template_preview(c=Depends(current)):
     p=Path(c.template_path or "")
