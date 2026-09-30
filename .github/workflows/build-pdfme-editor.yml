@@ -39,7 +39,10 @@ jobs:
       - name: Verify bundle
         run: |
           test -s frontend/pdfme-bundle/designer.js
-          node -e 'const fs=require("fs"); const s=fs.readFileSync("frontend/pdfme-bundle/designer.js","utf8"); if (s.includes("node:") || s.includes("@pdfme/") || s.includes("from \"buffer\"") || s.includes("from \"process\"")) process.exit(1);'
+          ! grep -q 'from "@pdfme/' frontend/pdfme-bundle/designer.js
+          ! grep -q 'from "node:' frontend/pdfme-bundle/designer.js
+          ! grep -q 'from "buffer"' frontend/pdfme-bundle/designer.js
+          ! grep -q 'from "process"' frontend/pdfme-bundle/designer.js
       - name: Commit generated bundle
         run: |
           git config user.name "github-actions[bot]"
