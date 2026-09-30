@@ -148,145 +148,169 @@ async function settings(){currentPage="settings";const s=await api("/api/setting
 async function reportDesigner(){
   currentPage="settings";
   const s=await api("/api/settings");
-  const l=s.report_layout||{}, p=l.patient||{}, r=l.results||{}, a=l.appearance||{}, pg=l.page||{};
+  const l=s.report_layout||{}, p=l.patient||{}, r=l.results||{}, a=l.appearance||{}, pg=l.page||{}, body=l.body||{}, manual=l.manual||{};
   const pv=(k,d)=>p[k]===undefined?d:p[k], rv=(k,d)=>r[k]===undefined?d:r[k], av=(k,d)=>a[k]===undefined?d:a[k], gv=(k,d)=>pg[k]===undefined?d:pg[k];
   const visible=p.visible||["name","age","sex","code","uhid","referred_by","received_on","reported_on","phone"];
   const order=p.order||["name","age_gender","code","uhid","referred_by","received_on","reported_on","phone"];
   const cols=r.columns||["name","value","unit","reference_range"];
-  const fieldDefs=[["name","Patient Name"],["age","Age"],["sex","Gender"],["code","Patient ID"],["uhid","UHID"],["referred_by","Referred By"],["received_on","Received On"],["reported_on","Reported On"],["phone","Phone"]];
-  const resultDefs=[["name","Test / Parameter"],["value","Result"],["unit","Unit"],["reference_range","Reference Range"]];
-  const pageSize=gv("size","A4");
-  // Test/section names are report data, never fixed designer content.
-  // The designer configures placement/style only.
-  const sectionNames=[];
-
+  const fields=[["name","Patient Name"],["age","Age"],["sex","Gender"],["code","Patient ID"],["uhid","UHID"],["referred_by","Referred By"],["received_on","Received On"],["reported_on","Reported On"],["phone","Phone"]];
+  const resultDefs=[["name","Parameter"],["value","Result"],["unit","Unit"],["reference_range","Reference Range"]];
+  const mode=l.mode||l.template_mode||((s.report_template&&s.report_template!=="—")?"template":"manual");
   app.innerHTML=shell(`
-  <div class="wrap">
+  <div class="wrap template-designer">
     <div class="page-head">
-      <div><div class="eyebrow">Report design</div><h1>Visual Report Designer</h1><p>Every change is reflected in the preview before you save the design.</p></div>
-      <div class="actions"><button onclick="settings()">Back</button><button class="primary" onclick="saveReportLayout()">Save design</button></div>
+      <div><div class="eyebrow">Master template</div><h1>Report Template Designer</h1><p>Design once. Every future patient report uses this layout automatically.</p></div>
+      <div class="actions"><button onclick="settings()">Back</button><button class="primary" onclick="saveReportLayout()">Save master template</button></div>
     </div>
 
-    <div class="card designer-live-banner"><span>●</span><div><b>Live preview</b><small>This preview shows the report layout you are editing. Actual test names and results are filled from each verified report.</small></div></div>
+    <div class="designer-modebar card">
+      <div><div><b>How should the page be built?</b><span class="muted">Choose the master page source. Test names and results are never configured here.</span></div></div>
+      <div class="designer-mode-switch">
+        <button type="button" class="${mode==="template"?"active":""}" data-mode="template" onclick="setDesignerMode('template')"><strong>Letterhead template</strong><small>Use uploaded PDF/image as the page background</small></button>
+        <button type="button" class="${mode==="manual"?"active":""}" data-mode="manual" onclick="setDesignerMode('manual')"><strong>Manual builder</strong><small>Build the page from Aarogyam blocks</small></button>
+      </div>
+      <input id="designerMode" type="hidden" value="${mode}">
+    </div>
 
-    <div class="designer-grid">
-      <div>
-        <div class="card">
-          <div class="designer-section-head"><div><span class="designer-step">01</span><div><h3>Page & template</h3><p class="muted">Choose the paper size and how the report body sits inside the centre letterhead.</p></div></div></div>
+    <div class="designer-workbench">
+      <aside class="designer-inspector">
+        <div class="inspector-title"><span class="eyebrow">Template blocks</span><b>Master layout</b></div>
+
+        <section class="inspector-card">
+          <div class="inspector-head"><span>01</span><div><b>Page & body</b><small>Paper size and safe report area</small></div></div>
           <div class="settings-grid">
-            <div class="field"><label>PAGE SIZE</label><select id="layoutPageSize" onchange="updateDesignerPreview()"><option value="A4" ${pageSize==="A4"?"selected":""}>A4</option><option value="A5" ${pageSize==="A5"?"selected":""}>A5</option><option value="LETTER" ${pageSize==="LETTER"?"selected":""}>Letter</option><option value="LEGAL" ${pageSize==="LEGAL"?"selected":""}>Legal</option></select></div>
-            <div class="field"><label>BODY TOP RESERVED</label><input id="layoutTop" type="number" min="20" max="260" value="${esc(gv("top",132))}" oninput="updateDesignerPreview()"></div>
-            <div class="field"><label>BOTTOM RESERVED</label><input id="layoutBottom" type="number" min="20" max="180" value="${esc(gv("bottom",82))}" oninput="updateDesignerPreview()"></div>
-            <div class="field"><label>LEFT MARGIN</label><input id="layoutLeft" type="number" min="10" max="120" value="${esc(gv("left",52))}" oninput="updateDesignerPreview()"></div>
-            <div class="field"><label>RIGHT MARGIN</label><input id="layoutRight" type="number" min="10" max="120" value="${esc(gv("right",52))}" oninput="updateDesignerPreview()"></div>
+            <div class="field"><label>PAGE</label><select id="layoutPageSize" onchange="updateDesignerPreview()"><option value="A4" ${gv("size","A4")==="A4"?"selected":""}>A4</option><option value="A5" ${gv("size","A4")==="A5"?"selected":""}>A5</option><option value="LETTER" ${gv("size","A4")==="LETTER"?"selected":""}>Letter</option><option value="LEGAL" ${gv("size","A4")==="LEGAL"?"selected":""}>Legal</option></select></div>
+            <div class="field"><label>TOP</label><input id="layoutTop" type="number" value="${esc(gv("top",132))}" oninput="updateDesignerPreview()"></div>
+            <div class="field"><label>BOTTOM</label><input id="layoutBottom" type="number" value="${esc(gv("bottom",82))}" oninput="updateDesignerPreview()"></div>
+            <div class="field"><label>LEFT</label><input id="layoutLeft" type="number" value="${esc(gv("left",52))}" oninput="updateDesignerPreview()"></div>
+            <div class="field"><label>RIGHT</label><input id="layoutRight" type="number" value="${esc(gv("right",52))}" oninput="updateDesignerPreview()"></div>
           </div>
-          <div class="template-preview-actions">
+          <div class="inspector-actions">
             <input id="tplDesigner" type="file" accept=".pdf,image/png,image/jpeg,image/webp" hidden onchange="uploadTemplateFromDesigner(this)">
-            <button type="button" onclick="document.getElementById('tplDesigner').click()">Upload / replace letterhead template</button>
-            <button type="button" onclick="clearTemplatePreview()">Use manual builder / blank page</button>
+            <button type="button" onclick="document.getElementById('tplDesigner').click()">Upload / replace letterhead</button>
+            <button type="button" onclick="clearTemplatePreview()">Remove letterhead</button>
           </div>
-          <p class="muted designer-help">Template mode uses your uploaded PDF/image as the static letterhead. Manual mode builds the page from the settings below. Either way, the report body is filled dynamically from each verified report.</p>
-        </div>
+        </section>
 
-        <div class="card">
-          <div class="designer-section-head"><div><span class="designer-step">02</span><div><h3>Patient credentials</h3><p class="muted">Choose fields, order and a light background that remains readable when printed.</p></div></div></div>
-          <div class="designer-check-grid">${fieldDefs.map(x=>`<label class="check-row"><input type="checkbox" class="patient-field" value="${x[0]}" ${visible.includes(x[0])?"checked":""} onchange="updateDesignerPreview()"><span>${x[1]}</span></label>`).join("")}</div>
+        <section class="inspector-card">
+          <div class="inspector-head"><span>02</span><div><b>Patient block</b><small>Credentials are filled from each report</small></div></div>
+          <div class="designer-check-grid">${fields.map(x=>`<label class="check-row"><input type="checkbox" class="patient-field" value="${x[0]}" ${visible.includes(x[0])?"checked":""} onchange="updateDesignerPreview()"><span>${x[1]}</span></label>`).join("")}</div>
           <div class="settings-grid">
-            <div class="field"><label>COLUMNS</label><select id="layoutPatientColumns" onchange="updateDesignerPreview()"><option value="1" ${Number(pv("columns",2))===1?"selected":""}>1 column</option><option value="2" ${Number(pv("columns",2))===2?"selected":""}>2 columns</option></select></div>
-            <div class="field"><label>STYLE</label><select id="layoutPatientStyle" onchange="updateDesignerPreview()"><option value="card" ${pv("style","card")==="card"?"selected":""}>Light card</option><option value="plain" ${pv("style","card")==="plain"?"selected":""}>Plain</option></select></div>
+            <div class="field"><label>COLUMNS</label><select id="layoutPatientColumns" onchange="updateDesignerPreview()"><option value="1" ${Number(pv("columns",2))===1?"selected":""}>1</option><option value="2" ${Number(pv("columns",2))===2?"selected":""}>2</option></select></div>
+            <div class="field"><label>STYLE</label><select id="layoutPatientStyle" onchange="updateDesignerPreview()"><option value="card" ${pv("style","card")==="card"?"selected":""}>Card</option><option value="plain" ${pv("style","card")==="plain"?"selected":""}>Plain</option></select></div>
             <div class="field"><label>BACKGROUND</label><input id="layoutPatientBg" type="color" value="${esc(pv("background","#F5F6F8"))}" oninput="updateDesignerPreview()"></div>
-            <div class="field"><label>TEXT SIZE</label><input id="layoutPatientSize" type="number" min="7" max="12" step=".5" value="${esc(pv("font_size",8.5))}" oninput="updateDesignerPreview()"></div>
+            <div class="field"><label>TEXT SIZE</label><input id="layoutPatientSize" type="number" step=".5" value="${esc(pv("font_size",8.5))}" oninput="updateDesignerPreview()"></div>
           </div>
-          <div class="field"><label>FIELD ORDER</label><input id="layoutPatientOrder" value="${esc(order.join(", "))}" oninput="updateDesignerPreview()" placeholder="name, age_gender, code, uhid..."></div>
-        </div>
+          <div class="field"><label>ORDER</label><input id="layoutPatientOrder" value="${esc(order.join(", "))}" oninput="updateDesignerPreview()"></div>
+        </section>
 
-        <div class="card">
-          <div class="designer-section-head"><div><span class="designer-step">03</span><div><h3>Dynamic test sections</h3><p class="muted">Configure the style of every test section. Section names are never stored here; they come automatically from each verified report.</p></div></div></div>
+        <section class="inspector-card">
+          <div class="inspector-head"><span>03</span><div><b>Dynamic report body</b><small>One loop handles every test type</small></div></div>
+          <div class="dynamic-rule"><b>↻ Dynamic section loop</b><span>At PDF generation time Aarogyam reads the verified report and creates as many sections and rows as needed.</span></div>
           <div class="settings-grid">
-            <div class="field"><label>ALIGNMENT</label><select id="layoutSectionAlign" onchange="updateDesignerPreview()"><option value="left" ${rv("section_align","left")==="left"?"selected":""}>Left</option><option value="center" ${rv("section_align","left")==="center"?"selected":""}>Center</option><option value="right" ${rv("section_align","left")==="right"?"selected":""}>Right</option></select></div>
             <div class="field"><label>FONT</label><select id="layoutFont" onchange="updateDesignerPreview()"><option value="Helvetica" ${av("font","Helvetica")==="Helvetica"?"selected":""}>Helvetica</option><option value="Times-Roman" ${av("font","Helvetica")==="Times-Roman"?"selected":""}>Times</option><option value="Courier" ${av("font","Helvetica")==="Courier"?"selected":""}>Courier</option></select></div>
-            <div class="field"><label>HEADING SIZE</label><input id="layoutSectionSize" type="number" min="6" max="18" step=".5" value="${esc(rv("section_font_size",7.9))}" oninput="updateDesignerPreview()"></div>
-            <div class="field"><label>HEADING TEXT</label><input id="layoutSectionText" type="color" value="${esc(rv("section_text","#151A2D"))}" oninput="updateDesignerPreview()"></div>
-            <div class="field"><label>HEADING BACKGROUND</label><input id="layoutSectionBg" type="color" value="${esc(rv("section_background","#EEF3F8"))}" oninput="updateDesignerPreview()"></div>
-            <div class="field"><label>PADDING</label><input id="layoutSectionPadding" type="number" min="2" max="16" value="${esc(rv("section_padding",5))}" oninput="updateDesignerPreview()"></div>
-            <label class="check-row"><input id="layoutSectionBold" type="checkbox" ${rv("section_bold",true)?"checked":""} onchange="updateDesignerPreview()"><span>Bold heading</span></label>
-            <label class="check-row"><input id="layoutSectionHeaders" type="checkbox" ${rv("section_headers",true)?"checked":""} onchange="updateDesignerPreview()"><span>Show section headings</span></label>
-          </div>
-          <div class="dynamic-block-card"><b>Dynamic section loop</b><span>Every section detected in the verified report is rendered here automatically, in the order it appears in that report. Missing sections are ignored; no fixed test list is saved in the master template.</span></div>
-        </div>
-
-        <div class="card">
-          <div class="designer-section-head"><div><span class="designer-step">04</span><div><h3>Result table</h3><p class="muted">Choose which columns appear below every section heading.</p></div></div></div>
-          <div class="designer-check-grid">${resultDefs.map(x=>`<label class="check-row"><input type="checkbox" class="result-column" value="${x[0]}" ${cols.includes(x[0])?"checked":""} onchange="updateDesignerPreview()"><span>${x[1]}</span></label>`).join("")}</div>
-          <div class="settings-grid">
-            <div class="field"><label>RESULT SIZE</label><input id="layoutResultSize" type="number" min="7" max="12" step=".5" value="${esc(rv("font_size",9))}" oninput="updateDesignerPreview()"></div>
+            <div class="field"><label>SECTION ALIGN</label><select id="layoutSectionAlign" onchange="updateDesignerPreview()"><option value="left" ${rv("section_align","left")==="left"?"selected":""}>Left</option><option value="center" ${rv("section_align","left")==="center"?"selected":""}>Center</option><option value="right" ${rv("section_align","left")==="right"?"selected":""}>Right</option></select></div>
+            <div class="field"><label>SECTION SIZE</label><input id="layoutSectionSize" type="number" step=".5" value="${esc(rv("section_font_size",7.9))}" oninput="updateDesignerPreview()"></div>
+            <div class="field"><label>RESULT SIZE</label><input id="layoutResultSize" type="number" step=".5" value="${esc(rv("font_size",9))}" oninput="updateDesignerPreview()"></div>
+            <div class="field"><label>SECTION BG</label><input id="layoutSectionBg" type="color" value="${esc(rv("section_background","#EEF3F8"))}" oninput="updateDesignerPreview()"></div>
             <div class="field"><label>TABLE HEADER</label><input id="layoutTableBg" type="color" value="${esc(rv("table_header_background","#F7F7FA"))}" oninput="updateDesignerPreview()"></div>
-            <label class="check-row"><input id="layoutGrid" type="checkbox" ${rv("show_grid",false)?"checked":""} onchange="updateDesignerPreview()"><span>Show row separators</span></label>
           </div>
-        </div>
+          <div class="designer-check-grid">${resultDefs.map(x=>`<label class="check-row"><input type="checkbox" class="result-column" value="${x[0]}" ${cols.includes(x[0])?"checked":""} onchange="updateDesignerPreview()"><span>${x[1]}</span></label>`).join("")}</div>
+          <div class="designer-check-grid compact-checks">
+            <label class="check-row"><input id="layoutSectionHeaders" type="checkbox" ${rv("section_headers",true)?"checked":""} onchange="updateDesignerPreview()"><span>Show section headings</span></label>
+            <label class="check-row"><input id="layoutSectionBold" type="checkbox" ${rv("section_bold",true)?"checked":""} onchange="updateDesignerPreview()"><span>Bold section headings</span></label>
+            <label class="check-row"><input id="layoutGrid" type="checkbox" ${rv("show_grid",false)?"checked":""} onchange="updateDesignerPreview()"><span>Show table grid</span></label>
+          </div>
+        </section>
 
-        <div class="card">
-          <div class="designer-section-head"><div><span class="designer-step">05</span><div><h3>Blank-page header & footer</h3><p class="muted">If no PDF template is uploaded, use these editable areas. Drag the blocks in the preview.</p></div></div></div>
-          <div class="template-preview-actions">
+        <section class="inspector-card">
+          <div class="inspector-head"><span>04</span><div><b>Header & identity</b><small>Manual mode only</small></div></div>
+          <div class="inspector-actions">
             <input id="logoDesigner" type="file" accept="image/png,image/jpeg,image/webp" hidden onchange="uploadCentreLogo(this)">
-            <button type="button" onclick="document.getElementById('logoDesigner').click()">Add / replace logo</button>
+            <button type="button" onclick="document.getElementById('logoDesigner').click()">Add / replace centre logo</button>
           </div>
-          <div class="field"><label>HEADER TEXT</label><textarea id="manualHeaderText" rows="2" placeholder="Centre name • address • phone • email" oninput="updateDesignerPreview()">${esc(l.manual?.header_text||"")}</textarea></div>
-          <div class="field"><label>FOOTER TEXT</label><textarea id="manualFooterText" rows="2" placeholder="Address • contact • doctor / authorised signatory" oninput="updateDesignerPreview()">${esc(l.manual?.footer_text||"")}</textarea></div>
-          <div class="field"><label>HEADER / FOOTER TEXT COLOUR</label><input id="manualTextColour" type="color" value="${esc(l.manual?.text_color||"#52606D")}" oninput="updateDesignerPreview()"></div>
-        </div>
-      </div>
+          <div class="field"><label>HEADER TEXT</label><textarea id="manualHeaderText" rows="2" oninput="updateDesignerPreview()">${esc(manual.header_text||"Centre name • Address • Contact")}</textarea></div>
+        </section>
 
-      <div>
-        <div class="card designer-preview-card">
-          <div class="preview-toolbar"><div><span class="eyebrow">Live preview</span><h3 id="designerPreviewTitle">Centre report page</h3></div><span class="preview-status">EDIT HERE</span></div>
-          <div id="reportPreviewViewport" class="report-preview-viewport">
-            <div id="reportPreviewPage" class="visual-report-page">
-              <div class="preview-overlay" id="previewOverlay">
-                <div class="manual-preview-header designer-block" draggable="true" data-block="header"><span id="previewHeaderText">Centre name • Address • Contact</span><button type="button" onclick="editPreviewText('manualHeaderText')">Edit</button></div>
-                <div class="preview-patient-pro"><b>PATIENT INFORMATION</b><div><span><small>PATIENT NAME</small>Patient Name</span><span><small>AGE / GENDER</small>Age / Gender</span></div><div><span><small>PATIENT ID</small>Patient ID</span><span><small>PHONE</small>Phone</span></div></div>
-                <div class="preview-report-title"><small>LABORATORY REPORT</small><strong>TEST TYPE</strong></div>
-                <div id="previewSections" class="preview-sections"></div>
-                <div class="manual-preview-footer designer-block" draggable="true" data-block="footer"><span id="previewFooterText">Address • Contact • Authorised Signatory</span><button type="button" onclick="editPreviewText('manualFooterText')">Edit</button></div>
-              </div>
+        <section class="inspector-card">
+          <div class="inspector-head"><span>05</span><div><b>Footer & signature</b><small>Manual mode only</small></div></div>
+          <div class="field"><label>FOOTER TEXT</label><textarea id="manualFooterText" rows="2" oninput="updateDesignerPreview()">${esc(manual.footer_text||"Doctor / Authorised Signatory • Centre contact")}</textarea></div>
+          <div class="field"><label>TEXT COLOUR</label><input id="manualTextColour" type="color" value="${esc(manual.text_color||"#52606D")}" oninput="updateDesignerPreview()"></div>
+        </section>
+
+        <div class="designer-tip"><b>Important</b><span>No LFT, CBC, thyroid, urine or other test is stored in this template. Those names, rows, results, units and reference ranges come only from the patient's verified report.</span></div>
+      </aside>
+
+      <main class="designer-stage">
+        <div class="stage-toolbar"><div><span class="eyebrow">Canvas</span><b id="designerPreviewTitle">Master report page</b></div><span class="canvas-badge">LIVE</span></div>
+        <div id="reportPreviewViewport" class="report-preview-viewport">
+          <div id="reportPreviewPage" class="visual-report-page master-canvas">
+            <div id="previewLetterhead" class="preview-letterhead"><span>LETTERHEAD / STATIC BACKGROUND</span></div>
+            <div class="master-block preview-manual-header" data-block="header"><span id="previewHeaderText"></span></div>
+            <div class="master-block preview-patient-block" data-block="patient">
+              <div class="block-tag">PATIENT CREDENTIALS</div>
+              <div id="previewPatientFields"></div>
             </div>
+            <div class="master-block preview-body-block" data-block="body">
+              <div class="block-tag">DYNAMIC REPORT BODY</div>
+              <div class="body-placeholder"><b>[TEST SECTION NAME]</b><div>[PARAMETER] <strong>[RESULT]</strong> [UNIT] <em>[REFERENCE RANGE]</em></div><div>[MORE PARAMETERS…]</div></div>
+            </div>
+            <div class="master-block preview-footer-block" data-block="footer"><span id="previewFooterText"></span><span class="signature-placeholder">Authorised Signatory</span></div>
           </div>
-          <div class="preview-note"><span>✓</span><p>This is a clean layout preview only. It does not display an old uploaded report. When a real report is generated, its detected test types, parameters, results, units and reference ranges are placed into this saved layout.</p></div>
         </div>
-      </div>
+        <div class="canvas-note"><b>Live master preview</b><span>Placeholders show the structure only. A real report replaces them with its own patient details, test sections, parameters, results, units and reference ranges. Long reports continue onto additional PDF pages.</span></div>
+      </main>
     </div>
   </div>`);
   await refreshCentreLogoPreview();
   updateDesignerPreview();
 }
 
+function setDesignerMode(mode){
+  const el=document.getElementById("designerMode");if(el)el.value=mode;
+  document.querySelectorAll(".designer-mode-switch button").forEach(b=>b.classList.toggle("active",b.dataset.mode===mode));
+  const letter=document.getElementById("previewLetterhead"), manual=document.querySelector(".preview-manual-header");
+  if(letter)letter.style.display=mode==="template"?"flex":"none";
+  if(manual)manual.style.display=mode==="manual"?"block":"none";
+  updateDesignerPreview();
+}
+
 function updateDesignerPreview(){
-  const align=document.getElementById("layoutSectionAlign")?.value||"left";
-  const bold=document.getElementById("layoutSectionBold")?.checked!==false;
-  const size=Number(document.getElementById("layoutSectionSize")?.value||7.9);
-  const bg=document.getElementById("layoutSectionBg")?.value||"#EEF3F8";
-  const text=document.getElementById("layoutSectionText")?.value||"#151A2D";
-  const pad=Number(document.getElementById("layoutSectionPadding")?.value||5);
-  const show=document.getElementById("layoutSectionHeaders")?.checked!==false;
-  const sectionNames=["Test Type / Section"];
-  const sections=document.getElementById("previewSections");
-  if(sections){
-    sections.innerHTML=show?sectionNames.map(n=>`
-      <div class="preview-section-live" style="background:${bg};text-align:${align};padding:${pad}px 9px;color:${text};font-size:${size}px;font-weight:${bold?700:400}" draggable="true" data-section="${esc(n)}">${esc(n.toUpperCase())}</div>
-      <div class="preview-result-header"><span>TEST / PARAMETER</span><span>RESULT</span><span>UNIT</span><span>REFERENCE</span></div>
-      <div class="preview-result-row"><span>Test / Parameter</span><strong>Result</strong><span>Unit</span><span>Reference range</span></div>
-      <div class="preview-result-row alt"><span>Another parameter</span><strong>—</strong><span>—</span><span>—</span></div>
-    `).join(""):"";
-  }
-  const header=document.getElementById("previewHeaderText"), footer=document.getElementById("previewFooterText");
-  if(header)header.textContent=document.getElementById("manualHeaderText")?.value||"Centre name • Address • Contact";
-  if(footer)footer.textContent=document.getElementById("manualFooterText")?.value||"Address • Contact • Authorised Signatory";
+  const mode=document.getElementById("designerMode")?.value||"manual";
   const page=document.getElementById("reportPreviewPage");
-  if(page){
-    const sizeName=document.getElementById("layoutPageSize")?.value||"A4";
-    page.dataset.pageSize=sizeName;
+  if(!page)return;
+  setDesignerModeVisual(mode);
+  const patientWrap=document.getElementById("previewPatientFields");
+  const checked=Array.from(document.querySelectorAll(".patient-field")).filter(x=>x.checked).map(x=>x.value);
+  const labels={name:"Patient Name",age:"Age",sex:"Gender",code:"Patient ID",uhid:"UHID",referred_by:"Referred By",received_on:"Received On",reported_on:"Reported On",phone:"Phone"};
+  const order=(document.getElementById("layoutPatientOrder")?.value||"").split(",").map(x=>x.trim()).filter(Boolean);
+  const fields=(order.length?order:checked).filter(x=>checked.includes(x));
+  if(patientWrap){
+    patientWrap.style.gridTemplateColumns=Number(document.getElementById("layoutPatientColumns")?.value||2)===1?"1fr":"1fr 1fr";
+    patientWrap.innerHTML=fields.map(k=>`<span><small>${esc(labels[k]||k)}</small><b>[${esc((labels[k]||k).toUpperCase())}]</b></span>`).join("");
   }
+  const sectionBg=document.getElementById("layoutSectionBg")?.value||"#EEF3F8";
+  const tableBg=document.getElementById("layoutTableBg")?.value||"#F7F7FA";
+  const sectionAlign=document.getElementById("layoutSectionAlign")?.value||"left";
+  const sectionHeaders=document.getElementById("layoutSectionHeaders")?.checked!==false;
+  const header=document.getElementById("previewHeaderText"),footer=document.getElementById("previewFooterText");
+  if(header)header.textContent=document.getElementById("manualHeaderText")?.value||"Centre name • Address • Contact";
+  if(footer)footer.textContent=document.getElementById("manualFooterText")?.value||"Doctor / Authorised Signatory • Centre contact";
+  const body=document.querySelector(".preview-body-block");
+  if(body){
+    body.querySelector(".block-tag").style.display=sectionHeaders?"block":"none";
+    body.querySelector(".body-placeholder").style.background=tableBg;
+    body.querySelector(".body-placeholder").style.borderColor=sectionBg;
+    body.querySelector(".body-placeholder").style.textAlign=sectionAlign;
+  }
+  page.dataset.pageSize=document.getElementById("layoutPageSize")?.value||"A4";
   requestReportPreviewScale();
+}
+
+function setDesignerModeVisual(mode){
+  const letter=document.getElementById("previewLetterhead"), manual=document.querySelector(".preview-manual-header");
+  if(letter)letter.style.display=mode==="template"?"flex":"none";
+  if(manual)manual.style.display=mode==="manual"?"block":"none";
 }
 
 let reportPreviewScaleFrame=0;
@@ -294,56 +318,23 @@ function requestReportPreviewScale(){
   cancelAnimationFrame(reportPreviewScaleFrame);
   reportPreviewScaleFrame=requestAnimationFrame(()=>requestAnimationFrame(scaleReportPreview));
 }
-
 function scaleReportPreview(){
-  const viewport=document.getElementById("reportPreviewViewport");
-  const page=document.getElementById("reportPreviewPage");
+  const viewport=document.getElementById("reportPreviewViewport"),page=document.getElementById("reportPreviewPage");
   if(!viewport||!page)return;
-
-  // The page keeps its real PDF dimensions; only the screen preview is scaled.
-  const pageWidth=page.offsetWidth;
-  const pageHeight=page.offsetHeight;
+  const pageWidth=page.offsetWidth,pageHeight=page.offsetHeight;
   if(!pageWidth||!pageHeight)return;
-
   const styles=getComputedStyle(viewport);
-  const availableWidth=Math.max(1,
-    viewport.clientWidth-
-    parseFloat(styles.paddingLeft||"0")-
-    parseFloat(styles.paddingRight||"0")
-  );
+  const availableWidth=Math.max(1,viewport.clientWidth-parseFloat(styles.paddingLeft||"0")-parseFloat(styles.paddingRight||"0"));
   const scale=Math.min(1,availableWidth/pageWidth);
-
   page.style.transformOrigin="top left";
   page.style.transform="scale("+scale+")";
-
-  // A CSS transform does not change layout dimensions, so reserve the
-  // scaled height explicitly to prevent a large blank/overflowing canvas.
-  viewport.style.height=Math.ceil(pageHeight*scale+
-    parseFloat(styles.paddingTop||"0")+
-    parseFloat(styles.paddingBottom||"0"))+"px";
+  viewport.style.height=Math.ceil(pageHeight*scale+parseFloat(styles.paddingTop||"0")+parseFloat(styles.paddingBottom||"0"))+"px";
   viewport.style.overflowX="hidden";
-
-  // Keep the unscaled page centered on desktop and the scaled page centered
-  // on narrow screens without changing its internal PDF coordinates.
-  const visualWidth=pageWidth*scale;
-  const centeredLeft=Math.max(0,(availableWidth-visualWidth)/2);
-  page.style.marginLeft=centeredLeft+"px";
-  page.style.marginRight="0";
+  page.style.marginLeft=Math.max(0,(availableWidth-pageWidth*scale)/2)+"px";
 }
-
-function initReportPreviewScaling(){
-  requestReportPreviewScale();
-  setTimeout(requestReportPreviewScale,0);
-  setTimeout(requestReportPreviewScale,100);
-  setTimeout(requestReportPreviewScale,300);
-}
-
+function initReportPreviewScaling(){requestReportPreviewScale();setTimeout(requestReportPreviewScale,0);setTimeout(requestReportPreviewScale,100);setTimeout(requestReportPreviewScale,300)}
 window.addEventListener("resize",requestReportPreviewScale);
 window.addEventListener("orientationchange",()=>setTimeout(requestReportPreviewScale,50));
-
-function editPreviewText(id){document.getElementById(id)?.focus()}
-
-function setupSectionDragDrop(){}
 
 async function uploadCentreLogo(input){
   if(!input.files[0])return;
@@ -416,22 +407,23 @@ async function saveReportLayout(){
   const visible=checked(".patient-field"), columns=checked(".result-column");
   if(!visible.includes("name"))visible.unshift("name");
   if(!columns.includes("name"))columns.unshift("name");
-  const order=document.getElementById("layoutPatientOrder").value.split(",").map(x=>x.trim()).filter(Boolean);
-  const sectionOrder=[];
+  const order=(document.getElementById("layoutPatientOrder")?.value||"").split(",").map(x=>x.trim()).filter(Boolean);
+  const mode=document.getElementById("designerMode")?.value||"manual";
   const layout={
+    mode,
+    template_mode:mode,
     page:{size:document.getElementById("layoutPageSize").value,left:Number(document.getElementById("layoutLeft").value),right:Number(document.getElementById("layoutRight").value),top:Number(document.getElementById("layoutTop").value),bottom:Number(document.getElementById("layoutBottom").value)},
     patient:{visible,order,columns:Number(document.getElementById("layoutPatientColumns").value),style:document.getElementById("layoutPatientStyle").value,font_size:Number(document.getElementById("layoutPatientSize").value),label_bold:true,background:document.getElementById("layoutPatientBg").value,border:"#E1E5EC"},
-    results:{columns,section_order:sectionOrder,section_headers:document.getElementById("layoutSectionHeaders").checked,section_align:document.getElementById("layoutSectionAlign").value,section_bold:document.getElementById("layoutSectionBold").checked,section_font_size:Number(document.getElementById("layoutSectionSize").value),section_text:document.getElementById("layoutSectionText").value,section_background:document.getElementById("layoutSectionBg").value,section_padding:Number(document.getElementById("layoutSectionPadding").value),table_header_background:document.getElementById("layoutTableBg").value,row_alt_background:"#FBFCFE",font_size:Number(document.getElementById("layoutResultSize").value),header_size:7.2,show_grid:document.getElementById("layoutGrid").checked},
-    appearance:{text:document.getElementById("layoutSectionText").value,accent:document.getElementById("layoutSectionText").value,muted:"#667085",font:document.getElementById("layoutFont").value},
-    template_mode:"manual",
+    body:{dynamic:true,source:"verified_report",loop:"sections_then_rows",multi_page:true},
+    results:{columns,section_order:[],section_headers:document.getElementById("layoutSectionHeaders").checked,section_align:document.getElementById("layoutSectionAlign").value,section_bold:document.getElementById("layoutSectionBold").checked,section_font_size:Number(document.getElementById("layoutSectionSize").value),section_text:"#151A2D",section_background:document.getElementById("layoutSectionBg").value,section_padding:5,table_header_background:document.getElementById("layoutTableBg").value,row_alt_background:"#FBFCFE",font_size:Number(document.getElementById("layoutResultSize").value),header_size:7.2,show_grid:document.getElementById("layoutGrid").checked},
+    appearance:{text:"#151A2D",accent:"#5F52E8",muted:"#667085",font:document.getElementById("layoutFont").value},
     manual:{header_text:document.getElementById("manualHeaderText").value,footer_text:document.getElementById("manualFooterText").value,text_color:document.getElementById("manualTextColour").value}
   };
   try{
     await api("/api/settings",{method:"PUT",body:new URLSearchParams({whatsapp_enabled:""+current.whatsapp_enabled,upi_id:current.upi_id||"",report_layout:JSON.stringify(layout)})});
-    alert("Report design saved. New PDFs will use the saved layout.");
+    alert("Master template saved. Future PDFs will use this layout.");
   }catch(e){alert(e.message)}
 }
-
 
 async function saveSettings(){try{await api("/api/settings",{method:"PUT",body:new URLSearchParams({whatsapp_enabled:document.getElementById("wa").value,upi_id:document.getElementById("upi").value})});alert("Settings saved");await settings()}catch(e){alert(e.message)}}
 async function uploadTemplate(){const el=document.getElementById("tpl");if(!el.files[0])return alert("Choose a PDF or image template");const f=new FormData();f.append("file",el.files[0]);try{await api("/api/settings/template",{method:"POST",body:f});alert("Template saved. Future generated reports will use it as the static letterhead.");await settings()}catch(e){alert(e.message)}}
