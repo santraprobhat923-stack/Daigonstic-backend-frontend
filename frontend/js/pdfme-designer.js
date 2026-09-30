@@ -28,9 +28,9 @@ async function init(){
   try{
     show("Loading master template…",true);
     const [{Designer},{text,image,signature,table},{},settings]=await Promise.all([
-      import("https://esm.sh/@pdfme/ui@6.1.12?bundle"),
-      import("https://esm.sh/@pdfme/schemas@6.1.12?bundle"),
-      import("https://esm.sh/@pdfme/common@6.1.12?bundle"),
+      import("/pdfme/@pdfme/ui@6.1.12?bundle"),
+      import("/pdfme/@pdfme/schemas@6.1.12?bundle"),
+      import("/pdfme/@pdfme/common@6.1.12?bundle"),
       api("/api/settings")
     ]);
     currentSettings=settings;
