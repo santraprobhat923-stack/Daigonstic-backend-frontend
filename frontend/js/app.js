@@ -280,7 +280,25 @@ function updateDesignerPreview(){
   if(footer)footer.textContent=document.getElementById("manualFooterText")?.value||"Address • Contact • Authorised Signatory";
   const page=document.getElementById("reportPreviewPage");
   if(page){const sizeName=document.getElementById("layoutPageSize")?.value||"A4";page.dataset.pageSize=sizeName;}
+  resizeReportPreview();
 }
+function resizeReportPreview(){
+  const viewport=document.getElementById("reportPreviewViewport");
+  const page=document.getElementById("reportPreviewPage");
+  if(!viewport||!page)return;
+  const baseWidth=page.offsetWidth;
+  const baseHeight=page.offsetHeight;
+  const availableWidth=Math.max(1,viewport.clientWidth-24);
+  const scale=Math.min(1,availableWidth/baseWidth);
+  page.style.transformOrigin="top left";
+  page.style.transform=scale<.999?"scale("+scale+")":"scale(1)";
+  page.style.marginLeft=scale<.999?"0":"auto";
+  page.style.marginRight=scale<.999?"0":"auto";
+  viewport.style.height=Math.ceil(baseHeight*scale+24)+"px";
+  viewport.style.overflowX="hidden";
+}
+window.addEventListener("resize",()=>{if(document.getElementById("reportPreviewPage"))resizeReportPreview()});
+
 
 function editPreviewText(id){document.getElementById(id)?.focus()}
 
