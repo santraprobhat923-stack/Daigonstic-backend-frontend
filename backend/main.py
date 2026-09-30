@@ -47,9 +47,10 @@ app=FastAPI(title="Aarogyam")
 app.mount("/static",StaticFiles(directory="frontend"),name="static")
 app.mount("/superadmin-static",StaticFiles(directory="frontend"),name="superadmin-static")
 @app.get("/pdfme/{asset_path:path}")
-def pdfme_asset(asset_path:str):
+def pdfme_asset(asset_path:str,request:Request):
     import requests as _requests
-    url="https://esm.sh/"+asset_path
+    query=("?"+request.url.query) if request.url.query else ""
+    url="https://esm.sh/"+asset_path+query
     try:
         response=_requests.get(url,timeout=30)
         response.raise_for_status()
