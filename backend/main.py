@@ -47,6 +47,8 @@ app=FastAPI(title="Aarogyam")
 app.mount("/static",StaticFiles(directory="frontend"),name="static")
 app.mount("/superadmin-static",StaticFiles(directory="frontend"),name="superadmin-static")
 @app.get("/pdfme/{asset_path:path}")
+@app.get("/@pdfme/{asset_path:path}")
+@app.get("/node/{asset_path:path}")
 def pdfme_asset(asset_path:str,request:Request):
     import requests as _requests
     query=("?"+request.url.query) if request.url.query else ""
