@@ -336,6 +336,11 @@ def settings_save(whatsapp_enabled:bool=Form(...),upi_id:str=Form(""),report_lay
 def template(file:UploadFile=File(...),c=Depends(current),db:Session=Depends(get_db)):
     if not (file.filename or "").lower().endswith(".pdf"): raise HTTPException(400,"Template must be PDF")
     p=STORAGE_DIR/f"centre_{c.id}"/"template.pdf"; p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(file.file.read()); c.template_path=str(p); db.commit(); return {"ok":True}
+@app.get("/api/settings/template")
+def template_preview(c=Depends(current)):
+    p=Path(c.template_path or "")
+    if not p.exists(): raise HTTPException(404,"No centre template uploaded")
+    return FileResponse(p,media_type="application/pdf",filename="centre-template.pdf")
 @app.get("/api/notifications")
 def notifications(c=Depends(current),db:Session=Depends(get_db)):
     return [{"id":n.id,"kind":n.kind,"message":n.message,"created_at":n.created_at.isoformat()} for n in db.query(Notification).filter_by(centre_id=c.id).order_by(Notification.id.desc()).limit(100)]
