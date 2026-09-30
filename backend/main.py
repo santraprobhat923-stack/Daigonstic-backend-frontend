@@ -1,7 +1,7 @@
 import json,secrets,hmac,hashlib
 from pathlib import Path
 from fastapi import FastAPI,UploadFile,File,Form,HTTPException,Request,Depends,BackgroundTasks
-from fastapi.responses import FileResponse,HTMLResponse
+from fastapi.responses import FileResponse,HTMLResponse,Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -46,6 +46,17 @@ migrate_legacy_sqlite()
 app=FastAPI(title="Aarogyam")
 app.mount("/static",StaticFiles(directory="frontend"),name="static")
 app.mount("/superadmin-static",StaticFiles(directory="frontend"),name="superadmin-static")
+@app.get("/pdfme/{asset_path:path}")
+def pdfme_asset(asset_path:str):
+    import requests as _requests
+    url="https://esm.sh/"+asset_path
+    try:
+        response=_requests.get(url,timeout=30)
+        response.raise_for_status()
+    except Exception as e:
+        raise HTTPException(502,f"Could not load pdfme asset: {e}")
+    media=response.headers.get("content-type","application/javascript")
+    return Response(content=response.content,media_type=media)
 app.include_router(superadmin_router)
 @app.on_event("startup")
 def startup():
