@@ -98,54 +98,6 @@ def pdfme_asset(asset_path:str,request:Request):
 
     media=response.headers.get("content-type","application/javascript").split(";")[0]
     return Response(content=body,media_type=media,headers={"Cache-Control":"public, max-age=3600"})
-@app.get("/{dependency_path:path}")
-def pdfme_dependency(dependency_path:str,request:Request):
-    """Proxy root-relative esm.sh dependencies emitted by pdfme bundles.
-
-    pdfme's browser bundles can import packages such as acorn, zod, pako,
-    base64-js, ieee754 and @pdf-lib/* from the site root. The main pdfme
-    proxy cannot see those paths, so handle only package-looking paths here.
-    This route is intentionally placed after the normal application routes.
-    """
-    from urllib.parse import unquote
-    import requests as _requests
-
-    path=unquote(dependency_path).lstrip("/")
-    known_prefixes=(
-        "acorn@", "zod@", "color@", "pako@", "node-html-better-parser@",
-        "base64-js@", "ieee754@", "npm/", "@pdf-lib/",
-    )
-    if not path.startswith(known_prefixes):
-        raise HTTPException(404,"Not found")
-
-    query=("?"+request.url.query) if request.url.query else ""
-    url="https://esm.sh/"+path+query
-    try:
-        response=_requests.get(url,timeout=30,headers={"User-Agent":"Aarogyam-pdfme-proxy/1.0"})
-        response.raise_for_status()
-    except Exception as e:
-        raise HTTPException(502,f"Could not load pdfme dependency: {e}")
-
-    body=response.content
-    ctype=response.headers.get("content-type","").lower()
-    if "javascript" in ctype or path.endswith((".js",".mjs","+esm")):
-        for prefix in (
-            b"acorn@",b"zod@",b"color@",b"pako@",b"node-html-better-parser@",
-            b"base64-js@",b"ieee754@",b"npm/",b"@pdf-lib/",
-        ):
-            body=body.replace(b'"/'+prefix,b'"/pdfme/'+prefix)
-            body=body.replace(b"'/'"+prefix,b"'/pdfme/"+prefix)
-        body=body.replace(b'"/@pdfme/',b'"/pdfme/@pdfme/')
-        body=body.replace(b"'/@pdfme/",b"'/pdfme/@pdfme/")
-        body=body.replace(b'"/node/',b'"/pdfme/node/')
-        body=body.replace(b"'/node/",b"'/pdfme/node/')
-        body=body.replace(b"https://esm.sh/",b"/pdfme/")
-        body=body.replace(b'from "/pdfme//',b'from "/pdfme/')
-        body=body.replace(b'import "/pdfme//',b'import "/pdfme/')
-        body=body.replace(b'export * from "/pdfme//',b'export * from "/pdfme/')
-
-    media=response.headers.get("content-type","application/javascript").split(";")[0]
-    return Response(content=body,media_type=media,headers={"Cache-Control":"public, max-age=3600"})
 app.include_router(superadmin_router)
 @app.on_event("startup")
 def startup():
@@ -541,3 +493,51 @@ def patient(token:str,db:Session=Depends(get_db)):
     if not r or not Path(r.pdf_path).exists(): raise HTTPException(404,"Report not released")
     c=db.get(Centre,r.centre_id); notify(db,c.id,r.id,"REPORT_DOWNLOADED",f"Patient downloaded report #{r.id}."); db.commit()
     return FileResponse(r.pdf_path,media_type="application/pdf",filename=f"Aarogyam_Report_{r.id}.pdf")
+@app.get("/{dependency_path:path}")
+def pdfme_dependency(dependency_path:str,request:Request):
+    """Proxy root-relative esm.sh dependencies emitted by pdfme bundles.
+
+    pdfme's browser bundles can import packages such as acorn, zod, pako,
+    base64-js, ieee754 and @pdf-lib/* from the site root. The main pdfme
+    proxy cannot see those paths, so handle only package-looking paths here.
+    This route is intentionally placed after the normal application routes.
+    """
+    from urllib.parse import unquote
+    import requests as _requests
+
+    path=unquote(dependency_path).lstrip("/")
+    known_prefixes=(
+        "acorn@", "zod@", "color@", "pako@", "node-html-better-parser@",
+        "base64-js@", "ieee754@", "npm/", "@pdf-lib/",
+    )
+    if not path.startswith(known_prefixes):
+        raise HTTPException(404,"Not found")
+
+    query=("?"+request.url.query) if request.url.query else ""
+    url="https://esm.sh/"+path+query
+    try:
+        response=_requests.get(url,timeout=30,headers={"User-Agent":"Aarogyam-pdfme-proxy/1.0"})
+        response.raise_for_status()
+    except Exception as e:
+        raise HTTPException(502,f"Could not load pdfme dependency: {e}")
+
+    body=response.content
+    ctype=response.headers.get("content-type","").lower()
+    if "javascript" in ctype or path.endswith((".js",".mjs","+esm")):
+        for prefix in (
+            b"acorn@",b"zod@",b"color@",b"pako@",b"node-html-better-parser@",
+            b"base64-js@",b"ieee754@",b"npm/",b"@pdf-lib/",
+        ):
+            body=body.replace(b'"/'+prefix,b'"/pdfme/'+prefix)
+            body=body.replace(b"'/"+prefix,b"'/pdfme/"+prefix)
+        body=body.replace(b'"/@pdfme/',b'"/pdfme/@pdfme/')
+        body=body.replace(b"'/@pdfme/",b"'/pdfme/@pdfme/")
+        body=body.replace(b'"/node/',b'"/pdfme/node/')
+        body=body.replace(b"'/node/",b"'/pdfme/node/')
+        body=body.replace(b"https://esm.sh/",b"/pdfme/")
+        body=body.replace(b'from "/pdfme//',b'from "/pdfme/')
+        body=body.replace(b'import "/pdfme//',b'import "/pdfme/')
+        body=body.replace(b'export * from "/pdfme//',b'export * from "/pdfme/')
+
+    media=response.headers.get("content-type","application/javascript").split(";")[0]
+    return Response(content=body,media_type=media,headers={"Cache-Control":"public, max-age=3600"})
