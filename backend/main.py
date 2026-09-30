@@ -335,13 +335,32 @@ def settings_save(whatsapp_enabled:bool=Form(...),upi_id:str=Form(""),report_lay
 @app.post("/api/settings/template")
 def template(file:UploadFile=File(...),c=Depends(current),db:Session=Depends(get_db)):
     name=(file.filename or "").lower()
-    if not (name.endswith(".pdf") or name.endswith((".png",".jpg",".jpeg",".webp"))):
-        raise HTTPException(400,"Template must be a PDF or image (PNG/JPG/WEBP)")
+    allowed_image=(".png",".jpg",".jpeg",".webp")
+    is_pdf=name.endswith(".pdf")
+    is_word=name.endswith((".doc",".docx"))
+    if not (is_pdf or is_word or name.endswith(allowed_image)):
+        raise HTTPException(400,"Template must be PDF, Word (DOC/DOCX), or image (PNG/JPG/WEBP)")
     p=STORAGE_DIR/f"centre_{c.id}"/"template.pdf"
     p.parent.mkdir(parents=True,exist_ok=True)
     raw=file.file.read()
-    if name.endswith(".pdf"):
+    if is_pdf:
         p.write_bytes(raw)
+    elif is_word:
+        work=Path(tempfile.mkdtemp(prefix="aarogyam_word_"))
+        try:
+            source=work/(Path(file.filename or "template.docx").name)
+            source.write_bytes(raw)
+            soffice=shutil.which("soffice") or shutil.which("libreoffice")
+            if not soffice:
+                raise HTTPException(500,"Word template conversion is not installed on this server. Install LibreOffice once, then upload again.")
+            proc=subprocess.run([soffice,"--headless","--convert-to","pdf","--outdir",str(work),str(source)],capture_output=True,text=True,timeout=60)
+            converted=work/(source.stem+".pdf")
+            if proc.returncode!=0 or not converted.exists():
+                detail=(proc.stderr or proc.stdout or "LibreOffice could not convert the Word template").strip()
+                raise HTTPException(400,f"Could not convert Word template: {detail[-500:]}")
+            p.write_bytes(converted.read_bytes())
+        finally:
+            shutil.rmtree(work,ignore_errors=True)
     else:
         try:
             from io import BytesIO
