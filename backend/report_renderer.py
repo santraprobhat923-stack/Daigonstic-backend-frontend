@@ -4,7 +4,7 @@ import json
 from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_LEFT, TA_CENTER
+from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 from reportlab.lib.pagesizes import A4, LETTER, LEGAL, A5
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
@@ -434,7 +434,7 @@ def _result_table(title, rows, layout, styles, available_width):
             fontSize=float(results.get("section_font_size", 7.9)),
             leading=float(results.get("section_font_size", 7.9)) + 1,
             textColor=_color(results.get("section_text"), colors.black),
-            alignment={"left": TA_LEFT, "center": TA_CENTER, "right": 2}.get(
+            alignment={"left": TA_LEFT, "center": TA_CENTER, "right": TA_RIGHT}.get(
                 str(results.get("section_align", "left")).lower(), TA_LEFT
             ),
         )
@@ -498,20 +498,32 @@ class _PageCountCanvas(canvas.Canvas):
         super().save()
 
     def _draw_page_number(self, total):
-        _, right, _, bottom = _metrics(self._aarogyam_layout)
-        text = _color(
-            self._aarogyam_layout["appearance"].get("text"),
-            colors.HexColor("#151A2D"),
-        )
+        layout = self._aarogyam_layout
+        page_w, page_h = _page_size(layout)
+        _, right, _, bottom = _metrics(layout)
+        text = _color(layout["appearance"].get("text"), colors.HexColor("#151A2D"))
         self.saveState()
+        manual = layout.get("manual") or {}
+        manual_color = _color(manual.get("text_color"), colors.HexColor("#52606D"))
+        self.setFillColor(manual_color)
+        self.setFont(_font_name(layout), 7)
+        header = str(manual.get("header_text") or "").strip()
+        footer = str(manual.get("footer_text") or "").strip()
+        if header:
+            y = page_h - max(14, float(layout.get("page", {}).get("top", 132)) - 18)
+            for line in header.splitlines()[:3]:
+                self.drawCentredString(page_w / 2, y, line[:180])
+                y -= 9
+        if footer:
+            y = max(20, float(layout.get("page", {}).get("bottom", 82)) - 18)
+            for line in footer.splitlines()[:3]:
+                self.drawCentredString(page_w / 2, y + 18, line[:180])
+                y -= 9
         self.setFillColor(text)
-        self.setFont(_font_name(self._aarogyam_layout), 7)
-        self.drawRightString(
-            _page_size(self._aarogyam_layout)[0] - right,
-            max(10, bottom - 18),
-            f"Page {self._pageNumber} of {total}",
-        )
+        self.setFont(_font_name(layout), 7)
+        self.drawRightString(page_w - right, max(10, bottom - 18), f"Page {self._pageNumber} of {total}")
         self.restoreState()
+
 
 
 class _ReportDocTemplate(BaseDocTemplate):
@@ -631,7 +643,10 @@ def make_pdf_body_on_template(template_path, data, out, layout=None):
     has multiple pages, its pages are used in order and the last template
     page is repeated for any additional report pages.
     """
-    body = render_body(data, layout)
+    effective_layout = _merge_layout(layout)
+    if template_path and Path(template_path).exists():
+        effective_layout["manual"] = {}
+    body = render_body(data, effective_layout)
     out.parent.mkdir(parents=True, exist_ok=True)
 
     if template_path and Path(template_path).exists():
