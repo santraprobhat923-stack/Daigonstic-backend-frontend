@@ -7,7 +7,7 @@ const root = dirname(fileURLToPath(import.meta.url));
 const outDir = resolve(root, "../../frontend/pdfme-bundle");
 const clawpdfBrowser = resolve(root, "node_modules/clawpdf/dist/browser.js");
 
-await mkdir(outDir, { recursive: true });
+await mkdir(resolve(outDir, "vendor"), { recursive: true });
 
 await build({
   entryPoints: ["entry.js"],
@@ -42,5 +42,6 @@ await writeFile(bundlePath, bundle);
 await copyFile(resolve(root, "shims/node-zlib.js"), resolve(outDir, "node-zlib.js"));
 await copyFile(resolve(root, "shims/node-url.js"), resolve(outDir, "node-url.js"));
 await copyFile(resolve(root, "shims/node-module.js"), resolve(outDir, "node-module.js"));
+await copyFile(resolve(root, "node_modules/clawpdf/dist/vendor/pdfium.esm.wasm"), resolve(outDir, "vendor/pdfium.esm.wasm"));
 
 console.log("PDFMe production bundle created.");
