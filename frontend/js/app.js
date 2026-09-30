@@ -158,7 +158,7 @@ async function reportDesigner(){
   const pageSize=gv("size","A4");
   // Test/section names are report data, never fixed designer content.
   // The designer configures placement/style only.
-  const sectionNames=["Test Type / Section"];
+  const sectionNames=[];
 
   app.innerHTML=shell(`
   <div class="wrap">
@@ -181,10 +181,11 @@ async function reportDesigner(){
             <div class="field"><label>RIGHT MARGIN</label><input id="layoutRight" type="number" min="10" max="120" value="${esc(gv("right",52))}" oninput="updateDesignerPreview()"></div>
           </div>
           <div class="template-preview-actions">
-            <input id="tplDesigner" type="file" accept="application/pdf" hidden onchange="uploadTemplateFromDesigner(this)">
-            <button type="button" onclick="document.getElementById('tplDesigner').click()">Upload / replace centre PDF template</button>
-            <button type="button" onclick="clearTemplatePreview()">Use blank designed page</button>
+            <input id="tplDesigner" type="file" accept=".pdf,image/png,image/jpeg,image/webp" hidden onchange="uploadTemplateFromDesigner(this)">
+            <button type="button" onclick="document.getElementById('tplDesigner').click()">Upload / replace letterhead template</button>
+            <button type="button" onclick="clearTemplatePreview()">Use manual builder / blank page</button>
           </div>
+          <p class="muted designer-help">Template mode uses your uploaded PDF/image as the static letterhead. Manual mode builds the page from the settings below. Either way, the report body is filled dynamically from each verified report.</p>
         </div>
 
         <div class="card">
@@ -200,7 +201,7 @@ async function reportDesigner(){
         </div>
 
         <div class="card">
-          <div class="designer-section-head"><div><span class="designer-step">03</span><div><h3>Test section heading</h3><p class="muted">Control where each section heading sits and how it looks. Drag sections in the preview to change their order.</p></div></div></div>
+          <div class="designer-section-head"><div><span class="designer-step">03</span><div><h3>Dynamic test sections</h3><p class="muted">Configure the style of every test section. Section names are never stored here; they come automatically from each verified report.</p></div></div></div>
           <div class="settings-grid">
             <div class="field"><label>ALIGNMENT</label><select id="layoutSectionAlign" onchange="updateDesignerPreview()"><option value="left" ${rv("section_align","left")==="left"?"selected":""}>Left</option><option value="center" ${rv("section_align","left")==="center"?"selected":""}>Center</option><option value="right" ${rv("section_align","left")==="right"?"selected":""}>Right</option></select></div>
             <div class="field"><label>FONT</label><select id="layoutFont" onchange="updateDesignerPreview()"><option value="Helvetica" ${av("font","Helvetica")==="Helvetica"?"selected":""}>Helvetica</option><option value="Times-Roman" ${av("font","Helvetica")==="Times-Roman"?"selected":""}>Times</option><option value="Courier" ${av("font","Helvetica")==="Courier"?"selected":""}>Courier</option></select></div>
@@ -211,8 +212,7 @@ async function reportDesigner(){
             <label class="check-row"><input id="layoutSectionBold" type="checkbox" ${rv("section_bold",true)?"checked":""} onchange="updateDesignerPreview()"><span>Bold heading</span></label>
             <label class="check-row"><input id="layoutSectionHeaders" type="checkbox" ${rv("section_headers",true)?"checked":""} onchange="updateDesignerPreview()"><span>Show section headings</span></label>
           </div>
-          <div id="sectionOrderList" class="section-order-list">${sectionNames.map((n,i)=>`<div class="designer-section-row" draggable="true" data-section="${esc(n)}"><span class="drag-handle">⋮⋮</span><b>${esc(n)}</b><select onchange="updateDesignerPreview()"><option>First</option><option ${i===1?"selected":""}>After previous</option></select></div>`).join("")}</div>
-          <p class="muted designer-help">The actual section names detected from a report will be used. This list provides the centre's preferred order; sections not present are ignored.</p>
+          <div class="dynamic-block-card"><b>Dynamic section loop</b><span>Every section detected in the verified report is rendered here automatically, in the order it appears in that report. Missing sections are ignored; no fixed test list is saved in the master template.</span></div>
         </div>
 
         <div class="card">
@@ -256,7 +256,6 @@ async function reportDesigner(){
       </div>
     </div>
   </div>`);
-  setupSectionDragDrop();
   await refreshCentreLogoPreview();
   updateDesignerPreview();
 }
@@ -269,9 +268,7 @@ function updateDesignerPreview(){
   const text=document.getElementById("layoutSectionText")?.value||"#151A2D";
   const pad=Number(document.getElementById("layoutSectionPadding")?.value||5);
   const show=document.getElementById("layoutSectionHeaders")?.checked!==false;
-  const list=document.getElementById("sectionOrderList");
-  const names=list?[...list.querySelectorAll("[data-section]")].map(x=>x.dataset.section):[];
-  const sectionNames=names.length?names:["Test Type / Section"];
+  const sectionNames=["Test Type / Section"];
   const sections=document.getElementById("previewSections");
   if(sections){
     sections.innerHTML=show?sectionNames.map(n=>`
@@ -346,15 +343,7 @@ window.addEventListener("orientationchange",()=>setTimeout(requestReportPreviewS
 
 function editPreviewText(id){document.getElementById(id)?.focus()}
 
-function setupSectionDragDrop(){
-  const list=document.getElementById("sectionOrderList"); if(!list)return;
-  let dragging=null;
-  list.querySelectorAll(".designer-section-row").forEach(row=>{
-    row.addEventListener("dragstart",()=>{dragging=row;row.classList.add("dragging")});
-    row.addEventListener("dragend",()=>{row.classList.remove("dragging");dragging=null;updateDesignerPreview()});
-    row.addEventListener("dragover",e=>{e.preventDefault();if(dragging&&dragging!==row){const rect=row.getBoundingClientRect();if(e.clientY<rect.top+rect.height/2)list.insertBefore(dragging,row);else list.insertBefore(dragging,row.nextSibling)}});
-  });
-}
+function setupSectionDragDrop(){}
 
 async function uploadCentreLogo(input){
   if(!input.files[0])return;
@@ -399,12 +388,17 @@ async function refreshReportTemplatePreview(){
 async function uploadTemplateFromDesigner(input){
   if(!input.files[0])return;
   const f=new FormData();f.append("file",input.files[0]);
-  try{await api("/api/settings/template",{method:"POST",body:f});await refreshReportTemplatePreview();alert("Centre PDF template uploaded. It is now visible in the preview.");}
-  catch(e){alert(e.message)}
+  try{
+    await api("/api/settings/template",{method:"POST",body:f});
+    alert("Letterhead template saved. Future reports will use it as the static page background.");
+  }catch(e){alert(e.message)}
 }
 
-function clearTemplatePreview(){
-  const frame=document.getElementById("templateFrame");if(frame)frame.src="about:blank";
+async function clearTemplatePreview(){
+  try{
+    await api("/api/settings/template",{method:"DELETE"});
+    alert("Manual builder mode enabled. Future reports will use the saved designer header/footer instead of an uploaded template.");
+  }catch(e){alert(e.message)}
 }
 
 
@@ -429,6 +423,7 @@ async function saveReportLayout(){
     patient:{visible,order,columns:Number(document.getElementById("layoutPatientColumns").value),style:document.getElementById("layoutPatientStyle").value,font_size:Number(document.getElementById("layoutPatientSize").value),label_bold:true,background:document.getElementById("layoutPatientBg").value,border:"#E1E5EC"},
     results:{columns,section_order:sectionOrder,section_headers:document.getElementById("layoutSectionHeaders").checked,section_align:document.getElementById("layoutSectionAlign").value,section_bold:document.getElementById("layoutSectionBold").checked,section_font_size:Number(document.getElementById("layoutSectionSize").value),section_text:document.getElementById("layoutSectionText").value,section_background:document.getElementById("layoutSectionBg").value,section_padding:Number(document.getElementById("layoutSectionPadding").value),table_header_background:document.getElementById("layoutTableBg").value,row_alt_background:"#FBFCFE",font_size:Number(document.getElementById("layoutResultSize").value),header_size:7.2,show_grid:document.getElementById("layoutGrid").checked},
     appearance:{text:document.getElementById("layoutSectionText").value,accent:document.getElementById("layoutSectionText").value,muted:"#667085",font:document.getElementById("layoutFont").value},
+    template_mode:"manual",
     manual:{header_text:document.getElementById("manualHeaderText").value,footer_text:document.getElementById("manualFooterText").value,text_color:document.getElementById("manualTextColour").value}
   };
   try{
