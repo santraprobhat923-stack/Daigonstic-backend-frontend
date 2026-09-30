@@ -310,7 +310,7 @@ function scaleReportPreview(){
   );
   const scale=Math.min(1,availableWidth/pageWidth);
 
-  page.style.transformOrigin="top center";
+  page.style.transformOrigin="top left";
   page.style.transform="scale("+scale+")";
 
   // A CSS transform does not change layout dimensions, so reserve the
@@ -322,8 +322,10 @@ function scaleReportPreview(){
 
   // Keep the unscaled page centered on desktop and the scaled page centered
   // on narrow screens without changing its internal PDF coordinates.
-  page.style.marginLeft="auto";
-  page.style.marginRight="auto";
+  const visualWidth=pageWidth*scale;
+  const centeredLeft=Math.max(0,(availableWidth-visualWidth)/2);
+  page.style.marginLeft=centeredLeft+"px";
+  page.style.marginRight="0";
 }
 
 function initReportPreviewScaling(){
