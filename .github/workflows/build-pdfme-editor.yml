@@ -7,6 +7,7 @@ on:
       - pdfme-production-bundle
     paths:
       - "tools/pdfme-editor/**"
+      - ".github/workflows/build-pdfme-editor.yml"
 
 permissions:
   contents: write
@@ -38,7 +39,7 @@ jobs:
       - name: Verify bundle
         run: |
           test -s frontend/pdfme-bundle/designer.js
-          if grep -Eq 'from ["'\'''](@pdfme/|buffer|process)["'\''']' frontend/pdfme-bundle/designer.js; then
+          if grep -Eq 'from ["'\'''](@pdfme/|buffer|process|node:)["'\''']' frontend/pdfme-bundle/designer.js; then
             echo "Unresolved bare module import found in bundle"
             grep -oE 'from ["'\'''][^"'\''']+' frontend/pdfme-bundle/designer.js | head -30
             exit 1
@@ -48,7 +49,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add frontend/pdfme-bundle/designer.js
+          git add frontend/pdfme-bundle/
           if git diff --cached --quiet; then
             echo "Bundle unchanged."
           else
