@@ -156,10 +156,9 @@ async function reportDesigner(){
   const fieldDefs=[["name","Patient Name"],["age","Age"],["sex","Gender"],["code","Patient ID"],["uhid","UHID"],["referred_by","Referred By"],["received_on","Received On"],["reported_on","Reported On"],["phone","Phone"]];
   const resultDefs=[["name","Test / Parameter"],["value","Result"],["unit","Unit"],["reference_range","Reference Range"]];
   const pageSize=gv("size","A4");
-  const sectionOrder=r.section_order||[];
-  // Section names are report data, not fixed designer presets. The designer
-  // controls only placement/style; actual test sections come from each report.
-  const sectionNames=sectionOrder.length?sectionOrder:["Test Type / Section"];
+  // Test/section names are report data, never fixed designer content.
+  // The designer configures placement/style only.
+  const sectionNames=["Test Type / Section"];
 
   app.innerHTML=shell(`
   <div class="wrap">
@@ -424,7 +423,7 @@ async function saveReportLayout(){
   if(!visible.includes("name"))visible.unshift("name");
   if(!columns.includes("name"))columns.unshift("name");
   const order=document.getElementById("layoutPatientOrder").value.split(",").map(x=>x.trim()).filter(Boolean);
-  const sectionOrder=[...document.querySelectorAll("#sectionOrderList [data-section]")].map(x=>x.dataset.section);
+  const sectionOrder=[];
   const layout={
     page:{size:document.getElementById("layoutPageSize").value,left:Number(document.getElementById("layoutLeft").value),right:Number(document.getElementById("layoutRight").value),top:Number(document.getElementById("layoutTop").value),bottom:Number(document.getElementById("layoutBottom").value)},
     patient:{visible,order,columns:Number(document.getElementById("layoutPatientColumns").value),style:document.getElementById("layoutPatientStyle").value,font_size:Number(document.getElementById("layoutPatientSize").value),label_bold:true,background:document.getElementById("layoutPatientBg").value,border:"#E1E5EC"},
