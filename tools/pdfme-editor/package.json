@@ -1,0 +1,14 @@
+{
+  "name": "aarogyam-pdfme-editor-build",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@pdfme/common": "6.1.12",
+    "@pdfme/schemas": "6.1.12",
+    "@pdfme/ui": "6.1.12"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.9"
+  },
+  "description": "Builds the self-contained Aarogyam PDFMe template editor bundle"
+}
