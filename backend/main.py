@@ -533,7 +533,7 @@ def pdfme_dependency(dependency_path:str,request:Request):
         body=body.replace(b'"/@pdfme/',b'"/pdfme/@pdfme/')
         body=body.replace(b"'/@pdfme/",b"'/pdfme/@pdfme/")
         body=body.replace(b'"/node/',b'"/pdfme/node/')
-        body=body.replace(b"'/node/",b"'/pdfme/node/')
+        body=body.replace(b"'/node/",b"'/pdfme/node/")
         body=body.replace(b"https://esm.sh/",b"/pdfme/")
         body=body.replace(b'from "/pdfme//',b'from "/pdfme/')
         body=body.replace(b'import "/pdfme//',b'import "/pdfme/')
