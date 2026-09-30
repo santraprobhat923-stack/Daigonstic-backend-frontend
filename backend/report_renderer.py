@@ -55,7 +55,7 @@ DEFAULT_LAYOUT = {
         "columns": ["name", "value", "unit", "reference_range"],
         "section_order": [],
         "section_align": "left",
-        "section_bold": true,
+        "section_bold": True,
         "section_font_size": 7.9,
         "section_text": "#151A2D",
         "section_padding": 5,
