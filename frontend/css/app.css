@@ -184,3 +184,20 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}
 @media(max-width:900px){.visual-report-page{transform-origin:top left}.report-preview-viewport{min-height:600px}.designer-live-banner{align-items:flex-start}.designer-live-banner button{margin-left:0}}
 
 .preview-centre-logo{position:absolute;left:52px;top:32px;max-width:110px;max-height:70px;object-fit:contain;cursor:move;border:1px dashed transparent}.preview-centre-logo:hover{border-color:#b8c5d4}
+
+/* Responsive report designer viewport — 30 Sep 2026 */
+.report-preview-viewport{width:100%;max-width:100%;min-width:0;overflow:hidden;position:relative;padding:16px}
+.visual-report-page{flex:0 0 auto;transform-origin:top center;will-change:transform}
+@media(max-width:900px){
+  .designer-grid{grid-template-columns:1fr;min-width:0}
+  .designer-grid>div{min-width:0;max-width:100%}
+  .designer-preview-card{width:100%;max-width:100%;overflow:hidden}
+  .report-preview-viewport{width:100%;max-width:100%;padding:12px;overflow:hidden}
+}
+@media(max-width:600px){
+  .report-preview-viewport{padding:10px}
+  .preview-toolbar,.preview-note{min-width:0;max-width:100%}
+  .preview-toolbar>div{min-width:0}
+  .preview-toolbar h3{overflow-wrap:anywhere}
+  .preview-note p{overflow-wrap:anywhere}
+}
