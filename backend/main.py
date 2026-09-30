@@ -60,7 +60,14 @@ def pdfme_asset(asset_path:str,request:Request):
     # Keep pdfme's nested ES-module imports and worker assets on Aarogyam's
     # own origin. Browsers otherwise reject the worker when it comes from esm.sh.
     if "javascript" in response.headers.get("content-type","").lower() or asset_path.endswith((".js",".mjs")):
+        # esm.sh returns a module graph with root-relative imports. Rewrite every
+        # root-relative module/node asset into our proxy namespace so the browser
+        # never leaves the Aarogyam origin.
+        import re as _re
+        body=_re.sub(rb'(?<=[\\\"\\\'])/(?:@pdfme|node)/',b'/pdfme/\\g<0>'.replace(b'\\g<0>',b''),body)
         body=body.replace(b"https://esm.sh/",b"/pdfme/")
+        body=body.replace(b'from "/pdfme//',b'from "/pdfme/')
+        body=body.replace(b'import "/pdfme//',b'import "/pdfme/')
     media=response.headers.get("content-type","application/javascript").split(";")[0]
     return Response(content=body,media_type=media,headers={"Cache-Control":"public, max-age=3600"})
 app.include_router(superadmin_router)
