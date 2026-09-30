@@ -41,7 +41,7 @@ jobs:
           test -s frontend/pdfme-bundle/designer.js
           if grep -Eq '@pdfme/|from "buffer"|from "process"|from "node:' frontend/pdfme-bundle/designer.js; then
             echo "Unresolved bare module import found in bundle"
-            grep -oE 'from ["'\'''][^"'\''']+' frontend/pdfme-bundle/designer.js | head -30
+            echo "Bare import detected; build must be fixed before deployment."
             exit 1
           fi
 
