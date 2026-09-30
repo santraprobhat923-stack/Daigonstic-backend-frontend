@@ -279,26 +279,62 @@ function updateDesignerPreview(){
   if(header)header.textContent=document.getElementById("manualHeaderText")?.value||"Centre name • Address • Contact";
   if(footer)footer.textContent=document.getElementById("manualFooterText")?.value||"Address • Contact • Authorised Signatory";
   const page=document.getElementById("reportPreviewPage");
-  if(page){const sizeName=document.getElementById("layoutPageSize")?.value||"A4";page.dataset.pageSize=sizeName;}
-  resizeReportPreview();
+  if(page){
+    const sizeName=document.getElementById("layoutPageSize")?.value||"A4";
+    page.dataset.pageSize=sizeName;
+  }
+  requestReportPreviewScale();
 }
-function resizeReportPreview(){
+
+let reportPreviewScaleFrame=0;
+function requestReportPreviewScale(){
+  cancelAnimationFrame(reportPreviewScaleFrame);
+  reportPreviewScaleFrame=requestAnimationFrame(()=>requestAnimationFrame(scaleReportPreview));
+}
+
+function scaleReportPreview(){
   const viewport=document.getElementById("reportPreviewViewport");
   const page=document.getElementById("reportPreviewPage");
   if(!viewport||!page)return;
-  const baseWidth=page.offsetWidth;
-  const baseHeight=page.offsetHeight;
-  const availableWidth=Math.max(1,viewport.clientWidth-24);
-  const scale=Math.min(1,availableWidth/baseWidth);
-  page.style.transformOrigin="top left";
-  page.style.transform=scale<.999?"scale("+scale+")":"scale(1)";
-  page.style.marginLeft=scale<.999?"0":"auto";
-  page.style.marginRight=scale<.999?"0":"auto";
-  viewport.style.height=Math.ceil(baseHeight*scale+24)+"px";
-  viewport.style.overflowX="hidden";
-}
-window.addEventListener("resize",()=>{if(document.getElementById("reportPreviewPage"))resizeReportPreview()});
 
+  // The page keeps its real PDF dimensions; only the screen preview is scaled.
+  const pageWidth=page.offsetWidth;
+  const pageHeight=page.offsetHeight;
+  if(!pageWidth||!pageHeight)return;
+
+  const styles=getComputedStyle(viewport);
+  const availableWidth=Math.max(1,
+    viewport.clientWidth-
+    parseFloat(styles.paddingLeft||"0")-
+    parseFloat(styles.paddingRight||"0")
+  );
+  const scale=Math.min(1,availableWidth/pageWidth);
+
+  page.style.transformOrigin="top center";
+  page.style.transform="scale("+scale+")";
+
+  // A CSS transform does not change layout dimensions, so reserve the
+  // scaled height explicitly to prevent a large blank/overflowing canvas.
+  viewport.style.height=Math.ceil(pageHeight*scale+
+    parseFloat(styles.paddingTop||"0")+
+    parseFloat(styles.paddingBottom||"0"))+"px";
+  viewport.style.overflowX="hidden";
+
+  // Keep the unscaled page centered on desktop and the scaled page centered
+  // on narrow screens without changing its internal PDF coordinates.
+  page.style.marginLeft="auto";
+  page.style.marginRight="auto";
+}
+
+function initReportPreviewScaling(){
+  requestReportPreviewScale();
+  setTimeout(requestReportPreviewScale,0);
+  setTimeout(requestReportPreviewScale,100);
+  setTimeout(requestReportPreviewScale,300);
+}
+
+window.addEventListener("resize",requestReportPreviewScale);
+window.addEventListener("orientationchange",()=>setTimeout(requestReportPreviewScale,50));
 
 function editPreviewText(id){document.getElementById(id)?.focus()}
 
