@@ -119,6 +119,10 @@ textarea{resize:vertical;min-height:60px}
     <input id="patientFont" type="number" min="7" max="14" step=".5" value="8.5">
    </div>
    <div>
+    <label>Block spacing</label>
+    <input id="patientSpacing" type="number" min="0" max="40" value="12">
+   </div>
+   <div>
     <label>Line spacing</label>
     <input id="patientLineSpacing" type="number" min="0.8" max="2.5" step=".05" value="1.25">
    </div>
@@ -158,6 +162,12 @@ textarea{resize:vertical;min-height:60px}
    <label><input id="showReceived" type="checkbox" checked> Received On</label>
    <label><input id="showReported" type="checkbox" checked> Reported On</label>
    <label><input id="showPhone" type="checkbox" checked> Phone</label>
+  </div>
+
+  <div class="group" style="border-top:0;padding-top:0;margin-top:12px">
+   <h2>Editable Field Labels</h2>
+   <div class="muted" style="margin-bottom:8px">Keep the checkbox enabled and edit the label beside it. These labels are saved globally for the centre.</div>
+   <div id="fieldLabels" class="field-labels"></div>
   </div>
  </div>
 
