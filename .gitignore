@@ -1,0 +1,11 @@
+.env
+*.db
+storage/
+__pycache__/
+*.pyc
+*.backup*
+*.before-*
+*.tgz
+frontend/pdfme-local/
+frontend/pdfme-bundle/assets/
+frontend/pdfme-bundle/*.wasm

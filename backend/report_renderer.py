@@ -18,6 +18,7 @@ from reportlab.platypus import (
     Table,
     TableStyle,
     KeepTogether,
+    Flowable,
 )
 from reportlab.pdfgen import canvas
 from reportlab.pdfbase.pdfmetrics import stringWidth
@@ -50,6 +51,8 @@ DEFAULT_LAYOUT = {
         "label_bold": True,
         "background": "#F5F6F8",
         "border": "#E2E5EC",
+        "spacing": 12,
+        "top_spacing": 0,
     },
     "results": {
         "columns": ["name", "value", "unit", "reference_range"],
@@ -96,8 +99,17 @@ RESULT_LABELS = {
 
 def _merge_layout(layout):
     out = json.loads(json.dumps(DEFAULT_LAYOUT))
+    out["manual"] = {
+        "header_text": "",
+        "footer_text": "",
+        "text_color": "#52606D",
+        "logo_path": "",
+        "logo_position": "right",
+        "logo_width": 90,
+        "logo_height": 35,
+    }
     if isinstance(layout, dict):
-        for group in ("page", "patient", "results", "appearance"):
+        for group in ("page", "patient", "results", "appearance", "manual"):
             if isinstance(layout.get(group), dict):
                 out[group].update(layout[group])
     return out
@@ -253,6 +265,26 @@ def _paragraph_styles(layout):
     }
 
 
+class _PatientPositioned(Flowable):
+    def __init__(self, content, x=0, y=0):
+        Flowable.__init__(self)
+        self.content = content
+        self.x = float(x or 0)
+        self.y = float(y or 0)
+
+    def wrap(self, availWidth, availHeight):
+        w, h = self.content.wrap(availWidth, availHeight)
+        self._w = w
+        self._h = h
+        return w, h
+
+    def draw(self):
+        self.canv.saveState()
+        self.canv.translate(self.x, -self.y)
+        self.content.drawOn(self.canv, 0, 0)
+        self.canv.restoreState()
+
+
 def _patient_block(patient, layout, styles, available_width):
     cfg = layout["patient"]
     visible = list(cfg.get("visible") or DEFAULT_LAYOUT["patient"]["visible"])
@@ -348,7 +380,13 @@ def _patient_block(patient, layout, styles, available_width):
         ]),
     )
 
-    return [outer, Spacer(1, 9)]
+    top_spacing = max(0, float(cfg.get("top_spacing", 0) or 0))
+    position = cfg.get("position") or {}
+    x_offset = float(position.get("x", 0) or 0) * 0.75
+    y_offset = float(position.get("y", 0) or 0) * 0.75
+
+    positioned = _PatientPositioned(outer, x_offset, y_offset)
+    return [Spacer(1, top_spacing), positioned, Spacer(1, 9)]
 
 
 def _result_columns(layout, available_width):
@@ -519,7 +557,15 @@ class _PageCountCanvas(canvas.Canvas):
             try:
                 logo_w = min(110, float(manual.get("logo_width", 90)))
                 logo_h = min(70, float(manual.get("logo_height", 35)))
-                logo_x = float(manual.get("logo_x", right))
+
+                position = str(manual.get("logo_position", "right")).lower()
+                if position == "left":
+                    logo_x = left
+                elif position == "center":
+                    logo_x = (page_w - logo_w) / 2
+                else:
+                    logo_x = page_w - right - logo_w
+
                 logo_y = page_h - float(manual.get("logo_y", 42)) - logo_h
                 self.drawImage(ImageReader(str(logo_path)), logo_x, logo_y, width=logo_w, height=logo_h, preserveAspectRatio=True, mask="auto", anchor="sw")
             except Exception:
@@ -587,6 +633,13 @@ def _build_story(data, layout, available_width):
 
     department = report.get("department") or data.get("department") or ""
     title = report.get("title") or data.get("title") or "LABORATORY REPORT"
+
+    report_top_spacing = max(
+        0,
+        float(layout["page"].get("report_top_spacing", 0))
+    )
+    if report_top_spacing:
+        story.append(Spacer(1, report_top_spacing))
 
     if department:
         story.append(Paragraph(_safe_text(department).upper(), styles["department"]))

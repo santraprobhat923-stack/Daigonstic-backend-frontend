@@ -1,3 +1,4 @@
+import pymupdf
 import json,secrets,hmac,hashlib
 from pathlib import Path
 from fastapi import FastAPI,UploadFile,File,Form,HTTPException,Request,Depends,BackgroundTasks
@@ -50,6 +51,7 @@ app.mount("/superadmin-static",StaticFiles(directory="frontend"),name="superadmi
 @app.get("/@pdfme/{asset_path:path}")
 @app.get("/node/{asset_path:path}")
 def pdfme_asset(asset_path:str,request:Request):
+    print("PDFME REQUEST:", asset_path, request.url.query, flush=True)
     """Serve pdfme's browser module graph through the Aarogyam origin.
 
     esm.sh emits root-relative imports such as /@pdfme/common and /node/*.mjs.
@@ -121,6 +123,14 @@ def template_designer():
     if not index_path.is_file():
         raise HTTPException(500,"Template designer frontend not found")
     return HTMLResponse(index_path.read_text(encoding="utf-8"))
+@app.get("/report-design")
+def report_design():
+    index_path = Path("frontend/report-design.html")
+    if not index_path.is_file():
+        raise HTTPException(500, "Report design frontend not found")
+    return HTMLResponse(index_path.read_text(encoding="utf-8"))
+
+
 @app.get("/")
 def home():
     # Read the HTML directly instead of FileResponse. This avoids a Content-Length
@@ -455,6 +465,23 @@ def template_preview(c=Depends(current)):
     p=Path(c.template_path or "")
     if not p.exists(): raise HTTPException(404,"No centre template uploaded")
     return FileResponse(p,media_type="application/pdf",filename="centre-template.pdf")
+@app.get("/api/settings/template/preview")
+def template_preview_image(c=Depends(current)):
+    p=Path(c.template_path or "")
+    if not p.exists(): raise HTTPException(404,"No centre template uploaded")
+    try:
+        doc=pymupdf.open(str(p))
+        if len(doc) < 1:
+            raise HTTPException(400,"Template PDF has no pages")
+        page=doc[0]
+        pix=page.get_pixmap(matrix=pymupdf.Matrix(1.5,1.5),alpha=False)
+        data=pix.tobytes("png")
+        doc.close()
+        return Response(content=data,media_type="image/png")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500,f"Could not render template preview: {e}")
 @app.post("/api/settings/logo")
 def centre_logo(file:UploadFile=File(...),c=Depends(current),db:Session=Depends(get_db)):
     if not (file.content_type or "").startswith("image/"):
@@ -507,7 +534,7 @@ def pdfme_dependency(dependency_path:str,request:Request):
 
     path=unquote(dependency_path).lstrip("/")
     known_prefixes=(
-        "acorn@", "zod@", "color@", "pako@", "node-html-better-parser@",
+        "acorn@", "zod@", "color@", "color-convert@", "color-string@", "color-name@", "html-entities@", "pako@", "node-html-better-parser@",
         "base64-js@", "ieee754@", "npm/", "@pdf-lib/",
     )
     if not path.startswith(known_prefixes):
@@ -530,7 +557,7 @@ def pdfme_dependency(dependency_path:str,request:Request):
     ctype=response.headers.get("content-type","").lower()
     if "javascript" in ctype or path.endswith((".js",".mjs","+esm")):
         for prefix in (
-            b"acorn@",b"zod@",b"color@",b"pako@",b"node-html-better-parser@",
+            b"acorn@",b"zod@",b"color@",b"color-convert@",b"color-string@",b"color-name@",b"html-entities@",b"pako@",b"node-html-better-parser@",
             b"base64-js@",b"ieee754@",b"npm/",b"@pdf-lib/",
         ):
             body=body.replace(b'"/'+prefix,b'"/pdfme/'+prefix)

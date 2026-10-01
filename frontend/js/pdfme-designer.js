@@ -27,11 +27,16 @@ async function loadBasePdf(){
 async function init(){
   try{
     show("Loading master template…",true);
-    const [{Designer},{text,image,signature,table},settings]=await Promise.all([
-      import("/pdfme/@pdfme/ui@6.1.12?standalone&target=es2022"),
+    const [{Designer},schemas,settings]=await Promise.all([
+      import("/static/pdfme-bundle/designer.js"),
       import("/pdfme/@pdfme/schemas@6.1.12?standalone&target=es2022"),
       api("/api/settings")
     ]);
+    const {
+      text,image,signature,table,line,rectangle,ellipse,svg,list,
+      multiVariableText,date,dateTime,time,select,checkbox,radioGroup,
+      circleMark
+    }=schemas;
     currentSettings=settings;
     const saved=settings.report_layout?.pdfme_template;
     const basePdf=await loadBasePdf();
@@ -39,7 +44,11 @@ async function init(){
     designer=new Designer({
       domContainer:document.getElementById("designer"),
       template,
-      plugins:{text,image,signature,Table:table},
+      plugins:{
+        text,image,signature,Table:table,
+        line,rectangle,ellipse,svg,list,multiVariableText,
+        date,dateTime,time,select,checkbox,radioGroup,circleMark
+      },
       options:{sidebarOpen:true,zoomLevel:1,theme:{token:{colorPrimary:"#6d5dfc"}}}
     });
     statusEl.style.display="none";
