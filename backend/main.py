@@ -117,6 +117,12 @@ def superadmin_home():
     index_path=Path("frontend/superadmin.html")
     if not index_path.is_file(): raise HTTPException(500,"Super Admin frontend not found")
     return HTMLResponse(index_path.read_text(encoding="utf-8"))
+@app.get("/report-design")
+def report_design():
+    index_path=Path("frontend/report-design.html")
+    if not index_path.is_file():
+        raise HTTPException(500,"Report design frontend not found")
+    return HTMLResponse(index_path.read_text(encoding="utf-8"))
 @app.get("/template-designer")
 def template_designer():
     index_path=Path("frontend/pdfme-designer.html")

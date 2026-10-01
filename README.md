@@ -477,3 +477,29 @@ The New Report intake now has a dedicated **Take Photo** camera action using the
 The camera input is reset after each capture so another photo can be taken immediately. Duplicate selections within the intake list are ignored, individual images can be removed before upload, and the Upload button remains disabled until at least one image is present. This is frontend-only and does not change the existing report/OCR API.
 
 The frontend asset version was bumped after this fix. Pull main and refresh Chrome before testing.
+
+
+## Standard Aarogyam Report Design — 1 Oct 2026
+
+The primary centre report-customization experience is now a simple **Standard Report Design** page at `/report-design`. Centres should not need to learn PDF coordinates, schemas or a document designer just to brand a diagnostic report.
+
+The standard design controls:
+- Centre name, address, phone and email/website.
+- Logo upload with left/centre/right placement and size.
+- Patient-information block style and one/two-column layout.
+- Show/hide patient fields such as Patient Name, Age/Gender, Patient ID, UHID, Referred By, Received On, Reported On and Phone.
+- Font family, base font size, text colour and accent colour.
+- Patient/section background colours.
+- Clean result-table lines or full grid.
+- Automatic page-break and repeated table-header preferences.
+- Footer text.
+- Live visual preview before saving.
+
+The report structure remains controlled by Aarogyam:
+`OCR → Technician Verification → Aarogyam renderer → Centre's saved report design → PDF`.
+
+Centres do **not** drag individual patient/test fields or set x/y coordinates. Test rows remain fully dynamic for CBC, thyroid, stool, chemistry and other report types.
+
+The existing PDFMe page at `/template-designer` is retained as an **Advanced Custom Report Designer** for exceptional centres that need exact placement. It is not the normal centre workflow.
+
+The standard design is stored in the existing tenant-scoped `report_layout` JSON field. The existing logo upload API at `/api/settings/logo` is used for centre branding. No database reset is required.
