@@ -105,10 +105,14 @@ function renderPreview(){
  $("paper").style.color="#151A2D";
 
  const patient=$("patientBlock");
+ const reportFlow=$("reportFlow");
  const oldPatient=merge(settings.report_layout||{}).patient;
  const pos=oldPatient.position||{x:0,y:0};
  patient.style.marginTop=$("patientSpacing").value+"px";
- patient.style.transform=`translate(${Number(pos.x)||0}px, ${Number(pos.y)||0}px)`;
+ const x=Number(pos.x)||0;
+ const y=Number(pos.y)||0;
+ patient.style.transform=`translate(${x}px, ${y}px)`;
+ if(reportFlow) reportFlow.style.transform=`translate(0px, ${y}px)`;
  patient.style.fontSize=$("patientFont").value+"px";
 
  document.querySelector(".report-title").style.fontSize=
@@ -211,6 +215,8 @@ function enablePatientDrag(){
 
  const applyPosition=(x,y)=>{
   patient.style.transform=`translate(${x}px, ${y}px)`;
+  const reportFlow=$("reportFlow");
+  if(reportFlow) reportFlow.style.transform=`translate(0px, ${y}px)`;
  };
 
  const flush=()=>{
