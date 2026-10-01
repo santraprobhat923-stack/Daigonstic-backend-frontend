@@ -365,21 +365,19 @@ def _patient_block(patient, layout, styles, available_width):
         rows.append(row)
 
     cell_tables = []
+    row_gap = max(0, float(cfg.get("row_gap", 4) or 0))
+    label_bold = bool(cfg.get("label_bold", True))
     for row in rows:
         cells = []
         for cell in row:
             if not cell:
                 cells.append("")
                 continue
-            cells.append(Table(
-                [[cell[0]], [cell[1]]],
-                colWidths=[col_width],
-                style=TableStyle([
-                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                    ("TOPPADDING", (0, 0), (-1, -1), 0),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), max(0, float(cfg.get("row_gap", 4) or 0))),
-                ]),
+            label_markup = f"<b>{cell[0].text}</b>" if label_bold else cell[0].text
+            value_markup = cell[1].text
+            cells.append(Paragraph(
+                f"{label_markup} : {value_markup}",
+                styles["patient_value"],
             ))
         cell_tables.append(cells)
 
