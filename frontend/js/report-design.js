@@ -10,7 +10,7 @@ const defaults={
  patient:{
   visible:["name","age","sex","code","uhid","referred_by","received_on","reported_on","phone"],
   labels:{name:"Patient Name",age_gender:"Age / Gender",code:"Patient ID",uhid:"UHID",referred_by:"Referred By",received_on:"Received On",reported_on:"Reported On",phone:"Phone"},
-  columns:2,style:"card",font_size:8.5,spacing:12,line_spacing:1.25,label_bold:true,
+  columns:2,style:"card",font_size:8.5,spacing:12,line_spacing:1.25,row_gap:4,label_bold:true,
   width_percent:100,height:0,transparent:false,background:"#F5F6F8",background_opacity:100,
   title:"PATIENT INFORMATION",title_align:"left",title_size:9,title_style:"bold",title_color:"#151A2D",
   position:{x:0,y:0}
@@ -167,7 +167,7 @@ async function init(){
   $("reportTitleText").value=l.results.report_title||"LABORATORY REPORT";$("reportTitleAlign").value=l.results.report_title_align||"left";$("reportTitleSize").value=l.results.report_title_size||12;$("reportTitleStyle").value=l.results.report_title_style||"bold";$("reportTitleColor").value=l.results.report_title_color||"#151A2D";$("reportTitleLineColor").value=l.results.report_title_line_color||"#5F52E8";
   fieldDefs.forEach(([check,key,label])=>{$(check).checked=l.patient.visible.includes(key);$("label_"+key).value=l.patient.labels[key]||label;});
   $("autoBreak").value=String(l.page.auto_break!==false);$("repeatHeader").value=String(l.page.repeat_table_header!==false);$("reportTop").value=l.page.top||132;
-  const ids=["patientStyle","patientCols","patientFont","patientSpacing","patientWidth","patientHeight","patientLineSpacing","patientBg","patientBgOpacity","patientTransparent","patientTitleAlign","patientTitleSize","patientTitleStyle","patientTitleColor","font","fontSize","sectionSize","rowSpacing","gridStyle","sectionAlign","sectionStyle","sectionColor","sectionBg","sectionTitleText","reportTitleText","reportTitleAlign","reportTitleSize","reportTitleStyle","reportTitleColor","reportTitleLineColor","pageSize","autoBreak","repeatHeader","reportTop"];
+  const ids=["patientStyle","patientCols","patientFont","patientSpacing","patientWidth","patientHeight","patientLineSpacing","patientRowGap","patientBg","patientBgOpacity","patientTransparent","patientTitleAlign","patientTitleSize","patientTitleStyle","patientTitleColor","font","fontSize","sectionSize","rowSpacing","gridStyle","sectionAlign","sectionStyle","sectionColor","sectionBg","sectionTitleText","reportTitleText","reportTitleAlign","reportTitleSize","reportTitleStyle","reportTitleColor","reportTitleLineColor","pageSize","autoBreak","repeatHeader","reportTop"];
   fieldDefs.forEach(([check,key])=>ids.push(check,"label_"+key));
   ids.forEach(id=>$(id)?.addEventListener("input",renderPreview));ids.forEach(id=>$(id)?.addEventListener("change",renderPreview));
   await loadTemplate();renderPreview();enablePatientDrag();show("Report design ready");
