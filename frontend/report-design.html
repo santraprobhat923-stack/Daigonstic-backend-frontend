@@ -21,7 +21,7 @@ textarea{resize:vertical;min-height:60px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .checks{display:grid;grid-template-columns:1fr 1fr;gap:7px}
 .checks label{display:flex;align-items:center;gap:7px;background:#f7f8fb;border-radius:8px;padding:8px;margin:0;color:#343a49}
-.checks input{width:auto}
+.checks input{width:auto}.field-labels{display:grid;gap:7px}.field-label-row{display:grid;grid-template-columns:24px 1fr;gap:8px;align-items:center}.field-label-row input[type=text]{padding:7px 8px}.field-label-row input[type=checkbox]{width:auto}
 .preview-wrap{display:flex;justify-content:center;align-items:flex-start}
 .preview-frame{width:min(100%,680px)}
 .preview-label{font-size:12px;color:#687082;margin:0 0 8px}
@@ -93,6 +93,14 @@ textarea{resize:vertical;min-height:60px}
 
   <div class="grid">
    <div>
+    <label>Block width (%)</label>
+    <input id="patientWidth" type="number" min="40" max="100" step="1" value="100">
+   </div>
+   <div>
+    <label>Block height (px, 0 = auto)</label>
+    <input id="patientHeight" type="number" min="0" max="600" step="2" value="0">
+   </div>
+   <div>
     <label>Patient block style</label>
     <select id="patientStyle">
      <option value="card">Card</option>
@@ -111,8 +119,33 @@ textarea{resize:vertical;min-height:60px}
     <input id="patientFont" type="number" min="7" max="14" step=".5" value="8.5">
    </div>
    <div>
-    <label>Block spacing</label>
-    <input id="patientSpacing" type="number" min="0" max="40" value="12">
+    <label>Line spacing</label>
+    <input id="patientLineSpacing" type="number" min="0.8" max="2.5" step=".05" value="1.25">
+   </div>
+  </div>
+
+  <div class="grid" style="margin-top:10px">
+   <div>
+    <label>Block background</label>
+    <input id="patientBg" type="color" value="#F5F6F8">
+   </div>
+   <div>
+    <label>Background opacity (%)</label>
+    <input id="patientBgOpacity" type="range" min="0" max="100" value="100">
+   </div>
+   <div>
+    <label>Transparent background</label>
+    <select id="patientTransparent"><option value="false">No</option><option value="true">Yes</option></select>
+   </div>
+  </div>
+
+  <div class="group" style="border-top:0;padding-top:0;margin-top:12px">
+   <h2>Patient Information Heading</h2>
+   <div class="grid">
+    <div><label>Alignment</label><select id="patientTitleAlign"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></div>
+    <div><label>Size</label><input id="patientTitleSize" type="number" min="7" max="18" step=".5" value="9"></div>
+    <div><label>Font style</label><select id="patientTitleStyle"><option value="bold">Bold</option><option value="normal">Normal</option><option value="italic">Italic</option><option value="bold_italic">Bold Italic</option></select></div>
+    <div><label>Font color</label><input id="patientTitleColor" type="color" value="#151A2D"></div>
    </div>
   </div>
 
@@ -132,6 +165,20 @@ textarea{resize:vertical;min-height:60px}
   <h2>Report & Results</h2>
 
   <div class="grid">
+   <div><label>Laboratory Report title</label><input id="reportTitleText" type="text" value="LABORATORY REPORT"></div>
+   <div><label>Report title alignment</label><select id="reportTitleAlign"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></div>
+   <div><label>Report title size</label><input id="reportTitleSize" type="number" min="8" max="20" step=".5" value="12"></div>
+   <div><label>Report title style</label><select id="reportTitleStyle"><option value="bold">Bold</option><option value="normal">Normal</option><option value="italic">Italic</option><option value="bold_italic">Bold Italic</option></select></div>
+   <div><label>Report title color</label><input id="reportTitleColor" type="color" value="#151A2D"></div>
+   <div><label>Report title line color</label><input id="reportTitleLineColor" type="color" value="#5F52E8"></div>
+   <div><label>Examination Results text</label><input id="sectionTitleText" type="text" value="EXAMINATION RESULTS"></div>
+   <div><label>Section alignment</label><select id="sectionAlign"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></div>
+   <div><label>Section style</label><select id="sectionStyle"><option value="bold">Bold</option><option value="normal">Normal</option><option value="italic">Italic</option><option value="bold_italic">Bold Italic</option></select></div>
+   <div><label>Section font color</label><input id="sectionColor" type="color" value="#151A2D"></div>
+   <div><label>Section background</label><input id="sectionBg" type="color" value="#ECEAFB"></div>
+  </div>
+
+  <div class="grid">
    <div>
     <label>Font</label>
     <select id="font">
@@ -148,7 +195,7 @@ textarea{resize:vertical;min-height:60px}
 
    <div>
     <label>Section heading size</label>
-    <input id="sectionSize" type="number" min="7" max="14" step=".5" value="8">
+    <input id="sectionSize" type="number" min="7" max="18" step=".5" value="8">
    </div>
 
    <div>
@@ -215,14 +262,14 @@ textarea{resize:vertical;min-height:60px}
 
    <div class="overlay" id="overlay">
     <div class="patient" id="patientBlock">
-     <div class="patient-title">PATIENT INFORMATION</div>
+     <div class="patient-title" id="pvPatientTitle">PATIENT INFORMATION</div>
      <div class="patient-grid" id="pvPatient"></div>
     </div>
 
     <div class="report-flow" id="reportFlow">
      <div class="report-title" id="reportTitleBlock">LABORATORY REPORT</div>
 
-     <div class="section">EXAMINATION RESULTS</div>
+     <div class="section" id="reportSectionBlock">EXAMINATION RESULTS</div>
 
      <div class="table">
      <div class="tr th">
@@ -242,6 +289,6 @@ textarea{resize:vertical;min-height:60px}
 
 </main>
 
-<script src="/static/js/report-design.js?v=20261001-3"></script>
+<script src="/static/js/report-design.js?v=20261001-4"></script>
 </body>
 </html>
