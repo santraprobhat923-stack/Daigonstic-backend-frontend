@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Aarogyam | Report Design</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;background:#f5f6fa;color:#171a2b;font-family:Inter,system-ui,-apple-system,Segoe UI,Arial,sans-serif}
+header{height:60px;background:#111321;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 16px}
+.brand b{font-size:16px}.brand span{font-size:12px;opacity:.65;margin-left:8px}
+.actions{display:flex;gap:8px}button{border:0;border-radius:9px;padding:9px 13px;font:inherit;cursor:pointer}.back{background:#fff;color:#222}.save{background:#6d5dfc;color:#fff;font-weight:700}
+main{display:grid;grid-template-columns:minmax(280px,430px) 1fr;gap:18px;max-width:1280px;margin:18px auto;padding:0 14px}
+.panel{background:#fff;border:1px solid #e4e7ef;border-radius:14px;padding:16px;box-shadow:0 6px 24px #00000008}
+h2{font-size:15px;margin:0 0 12px}.group{border-top:1px solid #eceef3;padding-top:14px;margin-top:14px}
+label{display:block;font-size:12px;color:#5f6678;margin:0 0 5px}input,select,textarea{width:100%;border:1px solid #dfe3ec;border-radius:8px;padding:9px;font:inherit;background:#fff;color:#171a2b}textarea{resize:vertical;min-height:60px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.checks{display:grid;grid-template-columns:1fr 1fr;gap:7px}.checks label{display:flex;align-items:center;gap:7px;background:#f7f8fb;border-radius:8px;padding:8px;margin:0;color:#343a49}.checks input{width:auto}
+.row{display:flex;gap:8px;align-items:center}.row>*{flex:1}
+.swatches{display:flex;gap:7px;flex-wrap:wrap}.swatches button{padding:7px 10px;background:#f5f6fa;border:1px solid #e1e4ec;color:#333}
+.preview-wrap{display:flex;justify-content:center;align-items:flex-start}.paper{width:min(100%,620px);aspect-ratio:210/297;background:#fff;border:1px solid #d9dce5;box-shadow:0 12px 35px #00000012;padding:38px 42px;position:relative;overflow:hidden}
+.preview-logo{height:38px;width:90px;object-fit:contain;display:none}.centre-name{font-size:19px;font-weight:700}.centre-meta{font-size:9px;color:#687082;line-height:1.4}.patient{margin-top:18px;border:1px solid #e2e5ec;background:#f5f6f8;border-radius:7px;padding:10px}.patient-title{font-size:9px;font-weight:700;border-bottom:1px solid #ddd;padding-bottom:5px;margin-bottom:7px}.patient-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.pv b{display:block;font-size:7px;color:#667085}.pv span{font-size:9px}.report-title{margin-top:14px;font-size:12px;font-weight:700;border-bottom:2px solid #5f52e8;padding-bottom:6px}.section{margin-top:11px;background:#eceafb;padding:5px 8px;font-size:8px;font-weight:700}.table{margin-top:4px;border-bottom:1px solid #e8eaf0}.tr{display:grid;grid-template-columns:2.5fr 1fr 1fr 1.4fr;font-size:8px;padding:5px 6px;border-bottom:1px solid #eaecf0}.th{font-weight:700;background:#f7f8fa}.footer{position:absolute;left:42px;right:42px;bottom:18px;border-top:1px solid #eee;padding-top:5px;font-size:7px;color:#697386}
+#status{position:fixed;z-index:20;left:50%;top:70px;transform:translateX(-50%);background:#fff;border:1px solid #e4e6ee;border-radius:10px;padding:10px 14px;box-shadow:0 10px 30px #0001;display:none}
+@media(max-width:850px){main{grid-template-columns:1fr}.preview-wrap{order:-1}.paper{width:100%}header{height:auto;min-height:60px;gap:10px}.brand span{display:none}.actions button{padding:8px 10px}}
+@media(max-width:520px){.grid,.checks{grid-template-columns:1fr}.paper{padding:22px 18px}.footer{left:18px;right:18px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><b>✚ Aarogyam</b><span>Standard Report Design</span></div>
+  <div class="actions"><button class="back" onclick="goBack()">Back</button><button class="save" onclick="saveDesign()">Save Design</button></div>
+</header>
+<div id="status"></div>
+<main>
+<section class="panel">
+  <h2>Report Design</h2>
+
+  <div class="group" style="border-top:0;padding-top:0;margin-top:0">
+    <h2>Centre Branding</h2>
+    <label>Centre name</label><input id="centreName" placeholder="Your Diagnostic Centre">
+    <div class="grid">
+      <div><label>Phone</label><input id="phone" placeholder="+91 ..."></div>
+      <div><label>Email / Website</label><input id="contact" placeholder="email or website"></div>
+    </div>
+    <label style="margin-top:10px">Address</label><textarea id="address" placeholder="Centre address"></textarea>
+    <div class="row" style="margin-top:10px"><input id="logo" type="file" accept="image/png,image/jpeg,image/webp"><select id="logoPos"><option value="left">Logo left</option><option value="center">Logo centre</option><option value="right">Logo right</option></select></div>
+    <div class="grid" style="margin-top:10px"><div><label>Logo width</label><input id="logoWidth" type="number" min="30" max="180" value="90"></div><div><label>Header text colour</label><input id="textColor" type="color" value="#151A2D"></div></div>
+  </div>
+
+  <div class="group">
+    <h2>Patient Details</h2>
+    <label>Patient block</label>
+    <select id="patientStyle"><option value="card">Card</option><option value="plain">Plain</option></select>
+    <label style="margin-top:9px">Columns</label>
+    <select id="patientCols"><option value="2">Two column</option><option value="1">Full width</option></select>
+    <div class="checks" style="margin-top:9px">
+      <label><input id="showName" type="checkbox" checked> Patient Name</label>
+      <label><input id="showAge" type="checkbox" checked> Age / Gender</label>
+      <label><input id="showCode" type="checkbox" checked> Patient ID</label>
+      <label><input id="showUhid" type="checkbox" checked> UHID</label>
+      <label><input id="showRef" type="checkbox" checked> Referred By</label>
+      <label><input id="showReceived" type="checkbox" checked> Received On</label>
+      <label><input id="showReported" type="checkbox" checked> Reported On</label>
+      <label><input id="showPhone" type="checkbox" checked> Phone</label>
+    </div>
+  </div>
+
+  <div class="group">
+    <h2>Report Appearance</h2>
+    <div class="grid">
+      <div><label>Font</label><select id="font"><option>Helvetica</option><option>Times-Roman</option><option>Courier</option></select></div>
+      <div><label>Base font size</label><input id="fontSize" type="number" min="7" max="14" step=".5" value="9"></div>
+      <div><label>Accent</label><input id="accent" type="color" value="#5F52E8"></div>
+      <div><label>Text</label><input id="bodyText" type="color" value="#151A2D"></div>
+      <div><label>Patient background</label><input id="patientBg" type="color" value="#F5F6F8"></div>
+      <div><label>Section background</label><input id="sectionBg" type="color" value="#ECEAFB"></div>
+    </div>
+    <label style="margin-top:10px">Result table</label>
+    <select id="gridStyle"><option value="false">Clean lines</option><option value="true">Full grid</option></select>
+  </div>
+
+  <div class="group">
+    <h2>Page Settings</h2>
+    <div class="grid">
+      <div><label>Automatic page break</label><select id="autoBreak"><option value="true">On</option><option value="false">Off</option></select></div>
+      <div><label>Repeat table header</label><select id="repeatHeader"><option value="true">On</option><option value="false">Off</option></select></div>
+    </div>
+    <label style="margin-top:10px">Footer</label><textarea id="footer" placeholder="Contact / disclaimer / signature text"></textarea>
+  </div>
+</section>
+
+<section class="panel preview-wrap">
+  <div class="paper" id="paper">
+    <img class="preview-logo" id="previewLogo">
+    <div class="centre-name" id="pvName">Your Diagnostic Centre</div>
+    <div class="centre-meta" id="pvMeta">Phone · Email / Website<br>Centre address</div>
+    <div class="patient">
+      <div class="patient-title">PATIENT INFORMATION</div>
+      <div class="patient-grid" id="pvPatient"></div>
+    </div>
+    <div class="report-title" id="pvTitle">LABORATORY REPORT</div>
+    <div class="section">EXAMINATION RESULTS</div>
+    <div class="table">
+      <div class="tr th"><span>TEST</span><span>RESULT</span><span>UNIT</span><span>REFERENCE</span></div>
+      <div class="tr"><span>Sample Parameter</span><span>—</span><span>—</span><span>—</span></div>
+      <div class="tr"><span>Another Result</span><span>—</span><span>mg/dL</span><span>70–110</span></div>
+    </div>
+    <div class="footer" id="pvFooter">Page footer / centre information</div>
+  </div>
+</section>
+</main>
+<script src="/static/js/report-design.js?v=20261001-1"></script>
+</body>
+</html>
