@@ -32,6 +32,7 @@ textarea{resize:vertical;min-height:60px}
 .patient-title{font-size:9px;font-weight:700;border-bottom:1px solid #ddd;padding-bottom:5px;margin-bottom:7px}
 .patient-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
 .pv b{display:block;font-size:7px;color:#667085}.pv span{font-size:9px}
+.report-flow{will-change:transform}
 .report-title{margin-top:0;font-size:12px;font-weight:700;border-bottom:2px solid #5f52e8;padding-bottom:6px}
 .section{margin-top:11px;background:#eceafb;padding:5px 8px;font-size:8px;font-weight:700}
 .tr{display:grid;grid-template-columns:2.5fr 1fr 1fr 1.4fr;font-size:8px;padding:5px 6px;border-bottom:1px solid #eaecf0}
@@ -218,11 +219,12 @@ textarea{resize:vertical;min-height:60px}
      <div class="patient-grid" id="pvPatient"></div>
     </div>
 
-    <div class="report-title" id="reportTitleBlock">LABORATORY REPORT</div>
+    <div class="report-flow" id="reportFlow">
+     <div class="report-title" id="reportTitleBlock">LABORATORY REPORT</div>
 
-    <div class="section">EXAMINATION RESULTS</div>
+     <div class="section">EXAMINATION RESULTS</div>
 
-    <div class="table">
+     <div class="table">
      <div class="tr th">
       <span>TEST</span><span>RESULT</span><span>UNIT</span><span>REFERENCE</span>
      </div>
