@@ -403,8 +403,9 @@ def _patient_block(patient, layout, styles, available_width):
             ("BOX", (0, 0), (-1, -1), 0.7, border),
         ]
 
+    title = str(cfg.get("title") or "PATIENT INFORMATION")
     outer = Table(
-        [[Paragraph("PATIENT INFORMATION", styles["patient_title"])],
+        [[Paragraph(_safe_text(title), styles["patient_title"])],
          [patient_table]],
         colWidths=[block_width],
         hAlign="LEFT",
@@ -419,13 +420,12 @@ def _patient_block(patient, layout, styles, available_width):
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("BACKGROUND", (0, 0), (-1, -1), bg)
             if cfg.get("style", "card") != "plain" and not cfg.get("transparent", False)
-            else ("BACKGROUND", (0, 0), (-1, -1), colors.transparent),
+            else ("BACKGROUND", (0, 0), (-1, -1), colors.Color(0, 0, 0, alpha=0)),
             ("BOX", (0, 0), (-1, -1), 0.7, border)
             if cfg.get("style", "card") != "plain"
             else ("BOX", (0, 0), (-1, -1), 0, colors.white),
         ]),
     )
-    title = str(cfg.get("title") or "PATIENT INFORMATION")
     outer.setStyle(TableStyle([]))
 
     top_spacing = max(0, float(cfg.get("top_spacing", 0) or 0))
