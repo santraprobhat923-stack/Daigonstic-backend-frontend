@@ -276,7 +276,10 @@ class _PatientPositioned(Flowable):
         w, h = self.content.wrap(availWidth, availHeight)
         self._w = w
         self._h = h
-        return w, h
+        # Keep following flowables directly below the visually shifted
+        # patient block. Positive Y moves the block downward, so reserve
+        # that extra height in the document flow as well.
+        return w, h + max(0, self.y)
 
     def draw(self):
         self.canv.saveState()
@@ -386,7 +389,7 @@ def _patient_block(patient, layout, styles, available_width):
     y_offset = float(position.get("y", 0) or 0) * 0.75
 
     positioned = _PatientPositioned(outer, x_offset, y_offset)
-    return [Spacer(1, top_spacing), positioned, Spacer(1, 9)]
+    return [Spacer(1, top_spacing), positioned, Spacer(1, 2)]
 
 
 def _result_columns(layout, available_width):
@@ -641,13 +644,9 @@ def _build_story(data, layout, available_width):
     department = report.get("department") or data.get("department") or ""
     title = report.get("title") or data.get("title") or "LABORATORY REPORT"
 
-    report_top_spacing = max(
-        0,
-        float(layout["page"].get("report_top_spacing", 0))
-    )
-    if report_top_spacing:
-        story.append(Spacer(1, report_top_spacing))
-
+    # The report always starts immediately after the patient credentials.
+    # Do not apply a separate report-top offset here; patient positioning
+    # already reserves the required flow height.
     if department:
         story.append(Paragraph(_safe_text(department).upper(), styles["department"]))
 
