@@ -517,11 +517,26 @@ class _PageCountCanvas(canvas.Canvas):
         logo_path = Path(str(manual.get("logo_path") or ""))
         if logo_path.exists():
             try:
-                logo_w = min(110, float(manual.get("logo_width", 90)))
-                logo_h = min(70, float(manual.get("logo_height", 35)))
-                logo_x = float(manual.get("logo_x", right))
+                logo_w = min(180, max(30, float(manual.get("logo_width", 90))))
+                logo_h = min(90, max(18, float(manual.get("logo_height", 35))))
+                position = str(manual.get("logo_position", "right")).lower()
+                if position == "left":
+                    logo_x = 18
+                elif position == "center":
+                    logo_x = (page_w - logo_w) / 2
+                else:
+                    logo_x = page_w - right - logo_w
                 logo_y = page_h - float(manual.get("logo_y", 42)) - logo_h
-                self.drawImage(ImageReader(str(logo_path)), logo_x, logo_y, width=logo_w, height=logo_h, preserveAspectRatio=True, mask="auto", anchor="sw")
+                self.drawImage(
+                    ImageReader(str(logo_path)),
+                    logo_x,
+                    logo_y,
+                    width=logo_w,
+                    height=logo_h,
+                    preserveAspectRatio=True,
+                    mask="auto",
+                    anchor="sw",
+                )
             except Exception:
                 pass
         header = str(manual.get("header_text") or "").strip()
