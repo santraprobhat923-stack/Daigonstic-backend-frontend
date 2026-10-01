@@ -54,6 +54,7 @@ DEFAULT_LAYOUT = {
         "border": "#E2E5EC",
         "spacing": 12,
         "line_spacing": 1.25,
+        "row_gap": 4,
         "width_percent": 100,
         "height": 0,
         "transparent": False,
@@ -377,7 +378,7 @@ def _patient_block(patient, layout, styles, available_width):
                     ("LEFTPADDING", (0, 0), (-1, -1), 0),
                     ("RIGHTPADDING", (0, 0), (-1, -1), 0),
                     ("TOPPADDING", (0, 0), (-1, -1), 0),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), max(0, float(cfg.get("row_gap", 4) or 0)),
                 ]),
             ))
         cell_tables.append(cells)
@@ -407,10 +408,12 @@ def _patient_block(patient, layout, styles, available_width):
         ]
 
     title = str(cfg.get("title") or "PATIENT INFORMATION")
+    min_height = max(0, float(cfg.get("height", 0) or 0) * 0.75)
     outer = Table(
         [[Paragraph(_safe_text(title), styles["patient_title"])],
          [patient_table]],
         colWidths=[block_width],
+        rowHeights=[min_height] if min_height > 0 else None,
         hAlign="LEFT",
         style=TableStyle([
             ("LEFTPADDING", (0, 0), (-1, -1), 11),
@@ -437,13 +440,6 @@ def _patient_block(patient, layout, styles, available_width):
     y_offset = float(position.get("y", 0) or 0) * 0.75
 
     min_height = max(0, float(cfg.get("height", 0) or 0) * 0.75)
-    if min_height > 0:
-        outer = Table([[outer]], colWidths=[block_width], rowHeights=[min_height],
-                      hAlign="LEFT", style=TableStyle([
-                          ("LEFTPADDING",(0,0),(-1,-1),0),("RIGHTPADDING",(0,0),(-1,-1),0),
-                          ("TOPPADDING",(0,0),(-1,-1),0),("BOTTOMPADDING",(0,0),(-1,-1),0),
-                          ("VALIGN",(0,0),(-1,-1),"TOP"),
-                      ]))
     positioned = _PatientPositioned(outer, x_offset, y_offset)
     return [Spacer(1, top_spacing), positioned, Spacer(1, 2)]
 
