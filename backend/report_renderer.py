@@ -436,7 +436,7 @@ def _patient_block(patient, layout, styles, available_width):
     x_offset = float(position.get("x", 0) or 0) * 0.75
     y_offset = float(position.get("y", 0) or 0) * 0.75
 
-    min_height = max(0, float(cfg.get("height", 0) or 0))
+    min_height = max(0, float(cfg.get("height", 0) or 0) * 0.75)
     if min_height > 0:
         outer = Table([[outer]], colWidths=[block_width], rowHeights=[min_height],
                       hAlign="LEFT", style=TableStyle([
