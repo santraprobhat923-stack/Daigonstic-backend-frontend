@@ -503,3 +503,46 @@ Centres do **not** drag individual patient/test fields or set x/y coordinates. T
 The existing PDFMe page at `/template-designer` is retained as an **Advanced Custom Report Designer** for exceptional centres that need exact placement. It is not the normal centre workflow.
 
 The standard design is stored in the existing tenant-scoped `report_layout` JSON field. The existing logo upload API at `/api/settings/logo` is used for centre branding. No database reset is required.
+
+## Latest report-designer implementation checkpoint — 1 Oct 2026
+
+The Standard Report Design work was continued on the AWS EC2 deployment and is now synchronized to GitHub main at commit 441d951.
+
+### Custom designer currently implemented
+- Standard designer page: /report-design.
+- Existing Advanced PDFMe designer at /template-designer is retained and was not removed.
+- Uploaded centre letterhead/template is previewed as the background of the designer paper.
+- The template preview is authenticated and cache-busted so the centre's uploaded letterhead can be viewed safely.
+- Patient-information block is the only manually positionable block in the standard designer.
+- Patient block supports pointer/touch dragging on desktop and Android Chrome.
+- Patient position is stored in report_layout.patient.position and restored after reload.
+- Frontend drag coordinates are converted by the renderer into ReportLab points.
+- The LABORATORY REPORT title is intentionally not independently draggable. It follows directly below the patient-information block so the report body starts naturally after patient details.
+- Individual dynamic test rows are not manually positioned. CBC, thyroid, stool, chemistry and other result types continue to flow through the normal renderer.
+- Existing controls for patient fields, columns, font sizes, row spacing, table grid, reference range/unit visibility, automatic page breaks and repeated table headers remain part of the standard design.
+
+### Renderer changes
+backend/report_renderer.py now contains a _PatientPositioned flowable used to apply the saved patient-block x/y offset while preserving the normal ReportLab flow. The frontend y-axis is interpreted as downward movement and converted for ReportLab's bottom-left coordinate system.
+
+The renderer also retains the newer logo sizing/placement limits merged from the upstream main branch. The final PDF still uses the centre's uploaded template as the branding/background layer.
+
+### Git synchronization checkpoint
+The EC2 changes were merged with the then-current GitHub main without force-pushing. Merge conflicts in backend/report_renderer.py, frontend/js/report-design.js and frontend/report-design.html were resolved deliberately, keeping the current custom designer while retaining compatible newer GitHub changes.
+
+Validation completed before the merge commit:
+- node --check frontend/js/report-design.js — passed.
+- .venv/bin/python -m py_compile backend/report_renderer.py backend/main.py — passed.
+- GitHub main now points to 441d951.
+
+### Current report-design testing state
+The code is synchronized and syntactically valid, but the complete production test of the final PDF still remains. The next report-design validation should use a real centre letterhead and verify:
+1. Patient block placement and saved position after refresh.
+2. Laboratory Report title starts immediately below the patient block.
+3. No overlap with the uploaded letterhead header/logo.
+4. No overlap with footer, signature or disclaimer areas.
+5. Correct result-section/table alignment.
+6. Long test names/results and multi-page behaviour.
+7. Final generated PDF matches the designer preview closely enough for centre use.
+
+### Development rule for report design
+Keep the Standard Report Designer simple and touch-friendly. Do not reintroduce arbitrary x/y controls for every field or make PDFMe the normal centre workflow. The standard experience should remain: upload letterhead → configure patient/result appearance → position the patient block if needed → save → Aarogyam renderer generates the dynamic report body.
