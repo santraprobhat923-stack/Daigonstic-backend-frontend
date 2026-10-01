@@ -333,6 +333,9 @@ def _patient_block(patient, layout, styles, available_width):
     visible = list(cfg.get("visible") or DEFAULT_LAYOUT["patient"]["visible"])
     order = list(cfg.get("order") or DEFAULT_LAYOUT["patient"]["order"])
     items = [k for k in order if k in visible and k in FIELD_LABELS]
+    if "age_gender" not in items and ("age_gender" in visible or "age" in visible or "sex" in visible):
+        insert_at = 1 if "name" in items else 0
+        items.insert(insert_at, "age_gender")
     if "name" in visible and "name" not in items:
         items.insert(0, "name")
     if not items:
@@ -693,7 +696,7 @@ def _build_story(data, layout, available_width):
     )
 
     department = report.get("department") or data.get("department") or ""
-    title = report.get("title") or data.get("title") or layout["results"].get("report_title") or "LABORATORY REPORT"
+    title = layout["results"].get("report_title") or report.get("title") or data.get("title") or "LABORATORY REPORT"
 
     # The report always starts immediately after the patient credentials.
     # Do not apply a separate report-top offset here; patient positioning
