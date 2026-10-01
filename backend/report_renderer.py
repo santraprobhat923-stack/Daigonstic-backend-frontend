@@ -378,7 +378,7 @@ def _patient_block(patient, layout, styles, available_width):
                     ("LEFTPADDING", (0, 0), (-1, -1), 0),
                     ("RIGHTPADDING", (0, 0), (-1, -1), 0),
                     ("TOPPADDING", (0, 0), (-1, -1), 0),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), max(0, float(cfg.get("row_gap", 4) or 0)),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), max(0, float(cfg.get("row_gap", 4) or 0))),
                 ]),
             ))
         cell_tables.append(cells)
