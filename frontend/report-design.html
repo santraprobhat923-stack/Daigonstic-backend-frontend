@@ -31,7 +31,7 @@ textarea{resize:vertical;min-height:60px}
 .patient{border:1px solid #e2e5ec;background:#f5f6f8;border-radius:7px;padding:10px;position:relative;z-index:3;will-change:transform;user-select:none}
 .patient-title{font-size:9px;font-weight:700;border-bottom:1px solid #ddd;padding-bottom:5px;margin-bottom:7px}
 .patient-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
-.pv b{display:block;font-size:7px;color:#667085}.pv span{font-size:9px}
+.pv{display:flex;align-items:baseline;gap:4px;min-width:0}.pv b{display:inline;font-size:7px;color:#667085;white-space:nowrap}.pv b::after{content:" :";}.pv span{font-size:9px;min-width:0;overflow-wrap:anywhere}
 .report-flow{will-change:transform}
 .report-title{margin-top:0;font-size:12px;font-weight:700;border-bottom:2px solid #5f52e8;padding-bottom:6px}
 .section{margin-top:11px;background:#eceafb;padding:5px 8px;font-size:8px;font-weight:700}
