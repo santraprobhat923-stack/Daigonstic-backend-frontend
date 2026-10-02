@@ -66,22 +66,23 @@ const fieldDefs=[
 ];
 
 function buildFieldLabelInputs(){
- const grid=$(".field-labels")||$("fieldLabels");
+ const grid=$("fieldLabels");
  if(!grid)return;
  grid.innerHTML="";
  fieldDefs.forEach(([check,key,label])=>{
   const row=document.createElement("div");row.className="field-label-row";
-  row.innerHTML='<input type="checkbox" id="'+check+'"><input type="text" id="label_'+key+'" aria-label="'+label+' label">';
+  row.innerHTML='<input type="text" id="label_'+key+'" aria-label="'+label+' label">';
   grid.appendChild(row);
  });
 }
 
 function syncLegacyChecks(){
+ // The visible field checkboxes in the Patient Details section are the
+ // single source of truth. Keep label inputs independent so duplicate IDs
+ // cannot hide or desynchronise the preview.
  fieldDefs.forEach(([check,key,label])=>{
-  const old=$(check);
-  const row=$("label_"+key)?.parentElement;
-  const newCheck=row?.querySelector("input[type=checkbox]");
-  if(old&&newCheck){newCheck.checked=old.checked;old.style.display="none";old.parentElement.style.display="none";}
+  const input=$("label_"+key);
+  if(input && !input.value) input.value=label;
  });
 }
 
@@ -115,18 +116,21 @@ function syncReportFlowPosition(layout){
  const p=layout.patient||{};
  const patient=$( "patientBlock"),flow=$( "reportFlow");
  if(!patient||!flow)return;
- const x=Number(p.position?.x)||0;
  const y=Number(p.position?.y)||0;
  const gap=7;
  const topSpacing=Math.max(0,Number(layout.page?.top_spacing ?? layout.patient?.top_spacing ?? layout.results?.top_spacing ?? 0)||0);
  // The patient keeps its normal layout height while its visual position is
  // translated. Start the report after that real height, plus the saved Y
  // offset and the same gap used by the PDF renderer.
- flow.style.transform="translate("+x+"px, "+(y+patient.offsetHeight+gap+topSpacing)+"px)";
+ flow.style.transform="translate(0px, "+(y+patient.offsetHeight+gap+topSpacing)+"px)";
 }
 
 function renderPreview(){
  const l=merge(settings.report_layout||{}),p=l.patient,r=l.results;
+ if(!Array.isArray(p.visible)||p.visible.length===0){
+  p.visible=[...defaults.patient.visible];
+  p.labels={...defaults.patient.labels,...(p.labels||{})};
+ }
  applyPageGeometry(l);
  const pv=$("pvPatient");pv.innerHTML="";
  fieldDefs.forEach(([check,key,label,value])=>{
@@ -168,7 +172,7 @@ function renderPreview(){
 function collect(){
  const old=merge(settings.report_layout||{}),visible=[],labels={};
  fieldDefs.forEach(([check,key,label])=>{
-  const c=$( "label_"+key)?.previousElementSibling;
+  const c=$(check);
   if(c?.checked)visible.push(key);
   labels[key]=($( "label_"+key)?.value||label).trim()||label;
  });
@@ -191,7 +195,26 @@ function enablePatientDrag(){
  patient.addEventListener("pointerup",finish);patient.addEventListener("pointercancel",finish);
 }
 
-async function showAuthenticatedTemplate(){try{const r=await fetch("/api/settings/template/preview?t="+Date.now(),{headers:auth(),cache:"no-store"});if(!r.ok)throw Error("Could not load template preview");const blob=await r.blob();if(templateObjectUrl)URL.revokeObjectURL(templateObjectUrl);templateObjectUrl=URL.createObjectURL(blob);$("templateBg").src=templateObjectUrl;$("templateBg").style.display="block";$("templateName").textContent="Uploaded letterhead";return true;}catch(e){$("templateBg").removeAttribute("src");$("templateBg").style.display="none";$("templateName").textContent="Template preview unavailable";return false;}}
+async function showAuthenticatedTemplate(){
+ try{
+  const r=await fetch("/api/settings/template/preview?t="+Date.now(),{headers:auth(),cache:"no-store"});
+  if(!r.ok)throw Error("Could not load template preview ("+r.status+")");
+  const blob=await r.blob();
+  if(!blob.type.startsWith("image/"))throw Error("Template preview is not an image");
+  if(templateObjectUrl)URL.revokeObjectURL(templateObjectUrl);
+  templateObjectUrl=URL.createObjectURL(blob);
+  const img=$("templateBg");
+  img.onload=()=>{img.style.display="block";};
+  img.onerror=()=>{img.style.display="none";};
+  img.src=templateObjectUrl;
+  $("templateName").textContent="Uploaded letterhead";
+  return true;
+ }catch(e){
+  $("templateBg").removeAttribute("src");
+  $("templateBg").style.display="none";
+  $("templateName").textContent="Template preview unavailable";
+  return false;
+ }}
 async function uploadTemplate(){const f=$("templateFile").files[0];if(!f)return alert("Choose a PDF or Word letterhead first.");const fd=new FormData();fd.append("file",f);try{show("Uploading letterhead…",true);await api("/api/settings/template",{method:"POST",body:fd});await showAuthenticatedTemplate();$("templateName").textContent=f.name;show("Letterhead uploaded");}catch(e){show("Upload failed: "+e.message,true);}}
 async function saveDesign(){try{show("Saving report design…",true);const layout=collect();const f=new URLSearchParams({whatsapp_enabled:String(settings.whatsapp_enabled||false),upi_id:String(settings.upi_id||""),report_layout:JSON.stringify(layout)});await api("/api/settings",{method:"PUT",body:f});settings.report_layout=layout;applyPageGeometry(layout);renderPreview();show("Report design saved");}catch(e){show("Save failed: "+e.message,true);}}
 async function loadTemplate(){try{const r=await fetch("/api/settings/template",{headers:auth(),cache:"no-store"});if(r.ok)await showAuthenticatedTemplate();}catch(e){}}
@@ -206,7 +229,9 @@ async function init(){
   $("font").value=l.appearance.font||"Helvetica";$("fontSize").value=l.results.font_size||9;$("sectionSize").value=l.results.section_font_size||8;$("rowSpacing").value=l.results.row_spacing??5;$("gridStyle").checked=!!l.results.show_grid;
   $("sectionAlign").value=l.results.section_align||"left";$("sectionStyle").value=l.results.section_style|| (l.results.section_bold===false?"normal":"bold");$("sectionColor").value=l.results.section_text||"#151A2D";$("sectionBg").value=l.results.section_background||"#ECEAFB";$("sectionTitleText").value=l.results.section_title||"EXAMINATION RESULTS";
   $("reportTitleText").value=l.results.report_title||"LABORATORY REPORT";$("reportTitleAlign").value=l.results.report_title_align||"left";$("reportTitleSize").value=l.results.report_title_size||12;$("reportTitleStyle").value=l.results.report_title_style||"bold";$("reportTitleColor").value=l.results.report_title_color||"#151A2D";$("reportTitleLineColor").value=l.results.report_title_line_color||"#5F52E8";
-  fieldDefs.forEach(([check,key,label])=>{$(check).checked=l.patient.visible.includes(key);$("label_"+key).value=l.patient.labels[key]||label;});syncLegacyChecks();
+  const savedVisible=Array.isArray(l.patient.visible)&&l.patient.visible.length?l.patient.visible:defaults.patient.visible;
+  fieldDefs.forEach(([check,key,label])=>{$(check).checked=savedVisible.includes(key);$("label_"+key).value=l.patient.labels[key]||label;});
+  syncLegacyChecks();
   $("autoBreak").value=String(l.page.auto_break!==false);$("repeatHeader").value=String(l.page.repeat_table_header!==false);$("reportTop").value=l.page.top||132;
   const ids=["patientStyle","patientCols","patientFont","patientSpacing","patientWidth","patientHeight","patientLineSpacing","patientRowGap","patientBg","patientBgOpacity","patientTransparent","patientTitleAlign","patientTitleSize","patientTitleStyle","patientTitleColor","font","fontSize","sectionSize","rowSpacing","gridStyle","sectionAlign","sectionStyle","sectionColor","sectionBg","sectionTitleText","reportTitleText","reportTitleAlign","reportTitleSize","reportTitleStyle","reportTitleColor","reportTitleLineColor","pageSize","autoBreak","repeatHeader","reportTop"];
   fieldDefs.forEach(([check,key])=>ids.push(check,"label_"+key));
