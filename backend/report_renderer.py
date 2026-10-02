@@ -194,13 +194,27 @@ def _page_size(layout):
 
 
 def _metrics(layout):
-    page = layout["page"]
-    left = max(12, float(page.get("left", 52)))
-    right = max(12, float(page.get("right", 52)))
-    top = max(24, float(page.get("top", 132)))
-    bottom = max(24, float(page.get("bottom", 82)))
+    """
+    Return the report body frame using the same normalized geometry as the
+    web report designer preview.
+
+    The designer currently uses:
+      left/right = 10% of page width
+      top = 31% of page height
+      bottom = 10% of page height
+
+    Keeping this geometry in the PDF renderer prevents the generated body
+    from falling back to the old fixed 52/132/82 point margins.
+    """
     _, page_h = _page_size(layout)
-    return left, right, page_h - top, bottom
+    page_w, _ = _page_size(layout)
+
+    left = page_w * 0.10
+    right = page_w * 0.10
+    top_offset = page_h * 0.31
+    bottom = page_h * 0.10
+
+    return left, right, page_h - top_offset, bottom
 
 
 def _safe_text(value):
@@ -315,15 +329,26 @@ class _PatientPositioned(Flowable):
 
     def wrap(self, availWidth, availHeight):
         w, h = self.content.wrap(availWidth, availHeight)
+
+        # Position is relative to the preview's overlay/frame origin.
+        # Clamp it to the frame so the patient card cannot be dragged or
+        # saved outside the configured report body region.
+        max_x = max(0, availWidth - w)
+        max_y = max(0, availHeight - h)
+        self.x = min(max(0, self.x), max_x)
+        self.y = min(max(0, self.y), max_y)
+
         self._w = w
         self._h = h
-        # Keep following flowables directly below the visually shifted
-        # patient block. Positive Y moves the block downward, so reserve
-        # that extra height in the document flow as well.
-        return w, h + max(0, self.y)
+
+        # Positive Y moves downward from the frame's top edge. Reserve that
+        # shifted distance so the following report flow starts below it.
+        return w, h + self.y
 
     def draw(self):
         self.canv.saveState()
+        # Platypus places the flowable at the frame origin. The browser
+        # preview measures Y downward, so translate by -Y in PDF coordinates.
         self.canv.translate(self.x, -self.y)
         self.content.drawOn(self.canv, 0, 0)
         self.canv.restoreState()
