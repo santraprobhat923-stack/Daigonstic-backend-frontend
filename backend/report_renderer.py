@@ -804,3 +804,29 @@ def make_pdf_body_on_template(template_path, data, out, layout=None):
     """
     Generate the dynamic multi-page report body and overlay it on the
     centre's uploaded PDF template.
+
+    A single-page letterhead is repeated for overflow pages. If the template
+    has multiple pages, its pages are used in order and the last template
+    page is repeated for any additional report pages.
+    """
+    body = render_body(data, layout)
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    if template_path and Path(template_path).exists():
+        base = PdfReader(template_path)
+        overlay = PdfReader(body)
+        writer = PdfWriter()
+
+        if not base.pages:
+            raise ValueError("Centre template PDF has no pages")
+
+        for index, overlay_page in enumerate(overlay.pages):
+            base_page = base.pages[index] if index < len(base.pages) else base.pages[-1]
+            page = base_page
+            page.merge_page(overlay_page)
+            writer.add_page(page)
+
+        with open(out, "wb") as f:
+            writer.write(f)
+    else:
+        out.write_bytes(body.read())
