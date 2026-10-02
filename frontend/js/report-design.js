@@ -140,7 +140,9 @@ function renderPreview(){
  });
  pv.style.gridTemplateColumns=$( "patientCols").value==="1"?"1fr":"1fr 1fr";
  pv.style.rowGap=(Number($( "patientRowGap").value)||0)+"px";
- const paper=$( "paper");\n const previewFont=$( "font").value||"Helvetica";\n paper.style.fontFamily=previewFont;paper.style.color=l.appearance.text||"#151A2D";
+ const paper=$( "paper");
+ const previewFont=$( "font").value||"Helvetica";
+ paper.style.fontFamily=previewFont;paper.style.color=l.appearance.text||"#151A2D";
  const patient=$( "patientBlock"),flow=$( "reportFlow"),pos=p.position||{x:0,y:0};
  patient.style.transform="translate("+(Number(pos.x)||0)+"px, "+(Number(pos.y)||0)+"px)";
  syncReportFlowPosition(l);
