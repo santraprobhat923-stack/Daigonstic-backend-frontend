@@ -328,11 +328,13 @@ class _PatientPositioned(Flowable):
     patient block, while drawOn() converts the saved designer x/y to the
     exact PDF position.
     """
-    def __init__(self, content, x=0, y=0):
+    def __init__(self, content, x=0, y=0, origin_x=0, origin_y=0):
         Flowable.__init__(self)
         self.content = content
         self.x = float(x or 0)
         self.y = float(y or 0)
+        self.origin_x = float(origin_x or 0)
+        self.origin_y = float(origin_y or 0)
         self._w = 0
         self._h = 0
 
@@ -347,14 +349,11 @@ class _PatientPositioned(Flowable):
         if not self._w and not self._h:
             self.wrap(0, 0)
 
-        frame = getattr(self, "_frame", None)
-        if frame is None:
-            raise RuntimeError("Patient positioning requires an active report frame")
-
-        # frame.x1 is the designer overlay's left edge.
-        # frame.y2 is the designer overlay's top edge.
-        pdf_x = frame.x1 + self.x
-        pdf_y = frame.y2 - self.y - self._h
+        # ReportLab does not expose the active Frame as a public
+        # attribute on a Flowable during drawOn(). Use the exact frame
+        # origin captured from the saved page geometry instead.
+        pdf_x = self.origin_x + self.x
+        pdf_y = self.origin_y - self.y - self._h
 
         self.content.drawOn(canv, pdf_x, pdf_y, _sW=0)
 
@@ -471,7 +470,16 @@ def _patient_block(patient, layout, styles, available_width):
     x_offset = float(position.get("x", 0) or 0) * px_to_pt
     y_offset = float(position.get("y", 0) or 0) * px_to_pt
 
-    positioned = _PatientPositioned(outer, x_offset, y_offset)
+    # The patient is positioned relative to the report frame's
+    # top-left corner, exactly like the browser designer overlay.
+    frame_left, _, frame_top, _ = _metrics(layout)
+    positioned = _PatientPositioned(
+        outer,
+        x_offset,
+        y_offset,
+        origin_x=frame_left,
+        origin_y=frame_top,
+    )
 
     # Measure once so the report cursor can start immediately after the
     # fixed patient block, exactly as the browser preview does. The patient
