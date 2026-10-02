@@ -304,8 +304,8 @@ def _paragraph_styles(layout):
         "table_value": ParagraphStyle(
             "table_value",
             fontName=bold_font,
-            fontSize=float(results.get("font_size", 9)),
-            leading=float(results.get("font_size", 9)) + 2,
+            fontSize=float(results.get("font_size", 9)) * 0.75,
+            leading=(float(results.get("font_size", 9)) + 2) * 0.75,
             textColor=text,
         ),
         "empty": ParagraphStyle(
@@ -416,6 +416,13 @@ def _patient_block(patient, layout, styles, available_width):
         hAlign="LEFT",
         repeatRows=0,
     )
+    # Mirror the browser grid's explicit row-gap without allowing Platypus
+    # to reflow the block. The gap is added only between rows.
+    if row_gap and len(rows) > 1:
+        patient_table.setStyle(TableStyle([
+            ("BOTTOMPADDING", (0, i), (-1, i), row_gap * 0.75)
+            for i in range(len(rows) - 1)
+        ]))
 
     bg = _color_opacity(cfg.get("background"), cfg.get("background_opacity", 100), colors.HexColor("#F5F7FA"))
     border = _color(cfg.get("border"), colors.HexColor("#E1E5EC"))
@@ -557,8 +564,8 @@ def _result_table(title, rows, layout, styles, available_width):
         ("RIGHTPADDING", (0, 0), (-1, -1), 6 * 0.75),
         ("TOPPADDING", (0, 0), (-1, 0), 5 * 0.75),
         ("BOTTOMPADDING", (0, 0), (-1, 0), 5 * 0.75),
-        ("TOPPADDING", (0, 1), (-1, -1), 5 * 0.75),
-        ("BOTTOMPADDING", (0, 1), (-1, -1), 5 * 0.75),
+        ("TOPPADDING", (0, 1), (-1, -1), float(results.get("row_spacing", 5)) * 0.75),
+        ("BOTTOMPADDING", (0, 1), (-1, -1), float(results.get("row_spacing", 5)) * 0.75),
         ("LINEBELOW", (0, 0), (-1, -1), 1 * 0.75, border),
     ]
 
