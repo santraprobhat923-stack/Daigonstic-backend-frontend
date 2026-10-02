@@ -5,7 +5,7 @@ from PIL import Image
 from .report_renderer import make_pdf_body_on_template
 try: import pytesseract
 except Exception: pytesseract=None
-from .config import STORAGE_DIR
+from .config import STORAGE_DIR, CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN
 from .models import Notification,WAJob
 
 UNIT_RE=r"(?:mg/dL|g/dL|gm/dL|ng/dL|ng/mL|pg/mL|µIU/mL|uIU/mL|mIU/L|IU/L|IU/mL|U/L|mmol/L|µmol/L|umol/L|mEq/L|mmHg|%|fL|pg|sec|/HPF|/hpf|cells/HPF|million/µL|million/uL|10\^\d+/µL|10\^\d+/uL|10\d+/µL|10\d+/uL|[A-Za-zµ]+/[A-Za-zµ]+)"
@@ -414,17 +414,7 @@ def _extract_report_meta(readings):
             if m and not report.get("title"): report["title"]=_clean_line(m.group(1))
     return report
 
-def extract(path):
-    readings=_ocr_variants(path)
-    combined="\n".join(readings)
-    patient={
-        **_patient_fields(readings),
-    }
-    if re.search(r"\b(?:age|sex|gender|mobile|phone|patient\s*(?:id|code)|uhid|referred|received|reported)\b",patient["name"],re.I):
-        patient["name"]=""
-    return combined,{"patient":patient,"tests":_parse_tests(readings),"report":_extract_report_meta(readings)}
-
-def sha(data): return hashlib.sha256(data).hexdigest()
+def extract(path):\n    # Cloudflare Workers AI is the primary semantic extraction engine.\n    # Tesseract remains a resilience fallback when Cloudflare is not configured\n    # or remote inference fails. Both paths produce the same internal schema.\n    if CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN:\n        try:\n            from .cloudflare_ai import extract_with_cloudflare\n            data=extract_with_cloudflare([path])\n            return json.dumps(data,ensure_ascii=False),data\n        except Exception as ai_error:\n            fallback_error=f"Cloudflare AI extraction failed: {ai_error}"\n    else:\n        fallback_error="Cloudflare AI is not configured; using local OCR fallback."\n    readings=_ocr_variants(path)\n    combined="\n".join(readings)\n    patient={**_patient_fields(readings)}\n    if re.search(r"\b(?:age|sex|gender|mobile|phone|patient\s*(?:id|code)|uhid|referred|received|reported)\b",patient["name"],re.I):\n        patient["name"]=""\n    data={"patient":patient,"tests":_parse_tests(readings),"report":_extract_report_meta(readings)}\n    data["extraction_engine"]="tesseract_fallback"\n    data["extraction_warning"]=fallback_error\n    return combined+"\n"+fallback_error,data\ndef sha(data): return hashlib.sha256(data).hexdigest()
 def notify(db,cid,rid,kind,msg): db.add(Notification(centre_id=cid,report_id=rid,kind=kind,message=msg))
 def queue_wa(db,centre,report,kind,payload):
     if not centre.whatsapp_enabled or not report.patient_phone: return
