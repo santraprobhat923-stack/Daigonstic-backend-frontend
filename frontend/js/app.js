@@ -48,14 +48,14 @@ async function startRecharge(quantity){
   }catch(e){if(status)status.innerHTML='<span>!</span><div><b>Recharge could not start</b><small>'+esc(e.message)+'</small></div>';alert(e.message)}
 }
 let intakeFiles=[];
-function capture(){currentPage="capture";intakeFiles=[];app.innerHTML=shell('<div class="wrap"><div class="page-head"><div><div class="eyebrow">Report intake</div><h1>New report</h1><p>Take photos or choose report images. You can collect several slips before starting OCR.</p></div></div><div class="card"><div class="upload-zone"><div class="upload-icon">▣</div><h3>Capture diagnostic report</h3><p class="muted">Use the centre phone camera for a fresh slip, or choose existing images from the gallery.</p><div class="capture-actions"><button type="button" class="primary" onclick="openCamera()">📷 Take Photo</button><button type="button" onclick="openGallery()">📁 Choose from Gallery</button></div><input id="cameraInput" type="file" accept="image/*" capture="environment" hidden onchange="addCameraFile(this.files[0]);this.value="""><input id="imgs" type="file" accept="image/*" multiple hidden onchange="addGalleryFiles(this.files)"><div id="selectedFiles" class="selected-files" aria-live="polite">No images selected yet.</div><div id="selectedFileList" class="selected-file-list"></div><button id="uploadStartBtn" class="primary" onclick="upload()" disabled>Upload & start OCR</button><div id="uploadStatus" class="upload-status" role="status" aria-live="polite"><span class="upload-ready">✓</span><div><b>Ready</b><small>Add one or more report images. OCR starts after you tap Upload & start OCR.</small></div></div></div><p class="footer-note">OCR is draft data. A technician reviews and approves every report before it is finalized.</p></div></div>')}
+function capture(){currentPage="capture";intakeFiles=[];app.innerHTML=shell('<div class="wrap"><div class="page-head"><div><div class="eyebrow">Report intake</div><h1>New report</h1><p>Take photos, scanned PDFs or choose existing laboratory documents. You can collect several slips before starting AI extraction.</p></div></div><div class="card"><div class="upload-zone"><div class="upload-icon">▣</div><h3>Capture diagnostic report</h3><p class="muted">Use the centre phone camera for a fresh slip, or choose images/PDF reports from the gallery.</p><div class="capture-actions"><button type="button" class="primary" onclick="openCamera()">📷 Take Photo</button><button type="button" onclick="openGallery()">📁 Choose from Gallery</button></div><input id="cameraInput" type="file" accept="image/*" capture="environment" hidden onchange="addCameraFile(this.files[0]);this.value="""><input id="imgs" type="file" accept="image/*,.pdf,application/pdf" multiple hidden onchange="addGalleryFiles(this.files)"><div id="selectedFiles" class="selected-files" aria-live="polite">No images selected yet.</div><div id="selectedFileList" class="selected-file-list"></div><button id="uploadStartBtn" class="primary" onclick="upload()" disabled>Upload & start OCR</button><div id="uploadStatus" class="upload-status" role="status" aria-live="polite"><span class="upload-ready">✓</span><div><b>Ready</b><small>Add one or more laboratory documents. Cloudflare AI starts after you tap Upload & start OCR.</small></div></div></div><p class="footer-note">OCR is draft data. A technician reviews and approves every report before it is finalized.</p></div></div>')}
 function openCamera(){document.getElementById("cameraInput")?.click()}
 function openGallery(){document.getElementById("imgs")?.click()}
 function addCameraFile(file){if(file)appendIntakeFiles([file])}
 function addGalleryFiles(files){appendIntakeFiles([...(files||[])])}
-function appendIntakeFiles(files){const seen=new Set(intakeFiles.map(f=>f.name+"|"+f.size+"|"+f.lastModified));for(const f of files){if(!f||!f.type?.startsWith("image/"))continue;const key=f.name+"|"+f.size+"|"+f.lastModified;if(!seen.has(key)){intakeFiles.push(f);seen.add(key)}}renderSelectedFiles()}
+function appendIntakeFiles(files){const seen=new Set(intakeFiles.map(f=>f.name+"|"+f.size+"|"+f.lastModified));for(const f of files){if(!f||!(f.type?.startsWith("image/")||f.type==="application/pdf"||f.name?.toLowerCase().endsWith(".pdf")))continue;const key=f.name+"|"+f.size+"|"+f.lastModified;if(!seen.has(key)){intakeFiles.push(f);seen.add(key)}}renderSelectedFiles()}
 function removeIntakeFile(i){intakeFiles.splice(i,1);renderSelectedFiles()}
-function renderSelectedFiles(){const count=intakeFiles.length,el=document.getElementById("selectedFiles"),list=document.getElementById("selectedFileList"),btn=document.getElementById("uploadStartBtn");if(el)el.textContent=count?(count+" image"+(count===1?"":"s")+" ready to upload"):"No images selected yet.";if(btn)btn.disabled=!count;if(list)list.innerHTML=intakeFiles.map((f,i)=>'<div class="selected-file"><span><b>'+esc(f.name)+'</b><small>'+Math.max(1,Math.round(f.size/1024))+' KB</small></span><button type="button" aria-label="Remove '+esc(f.name)+'" onclick="removeIntakeFile('+i+')">×</button></div>').join("")}
+function renderSelectedFiles(){const count=intakeFiles.length,el=document.getElementById("selectedFiles"),list=document.getElementById("selectedFileList"),btn=document.getElementById("uploadStartBtn");if(el)el.textContent=count?(count+" document"+(count===1?"":"s")+" ready to upload"):"No documents selected yet.";if(btn)btn.disabled=!count;if(list)list.innerHTML=intakeFiles.map((f,i)=>'<div class="selected-file"><span><b>'+esc(f.name)+'</b><small>'+Math.max(1,Math.round(f.size/1024))+' KB</small></span><button type="button" aria-label="Remove '+esc(f.name)+'" onclick="removeIntakeFile('+i+')">×</button></div>').join("")}
 function setUploadStatus(title, message, kind="ready") {
   const el=document.getElementById("uploadStatus");
   if(!el) return;
@@ -68,7 +68,7 @@ async function upload(){
   const files=[...intakeFiles];const f=new FormData();
   files.forEach(x=>f.append("files",x));
   if(btn)btn.disabled=true;
-  setUploadStatus("Uploading slip…","Creating the report job. OCR will continue in the background.");
+  setUploadStatus("Uploading document…","Creating the report job. Cloudflare AI will interpret the document in the background.");
   try{
     const j=await api("/api/reports/upload",{method:"POST",body:f});
     const dup=j.duplicate_count||0,added=j.uploaded_count||files.length;
@@ -76,7 +76,7 @@ async function upload(){
     const ids=createdReports.map(x=>"#"+x.id).join(", ");
     setUploadStatus(
       createdReports.length+" report job"+(createdReports.length===1?"":"s")+" created.",
-      ids+" "+(createdReports.length===1?"is":"are")+" being read by OCR in the background. You can upload more slips now.",
+      ids+" "+(createdReports.length===1?"is":"are")+" being interpreted by AI in the background. You can upload more slips now.",
       "success"
     );
     if(dup)setUploadStatus(
