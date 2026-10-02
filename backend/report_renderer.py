@@ -245,22 +245,22 @@ def _paragraph_styles(layout):
         "patient_label": ParagraphStyle(
             "patient_label",
             fontName=bold_font if patient.get("label_bold", True) else base_font,
-            fontSize=6.6,
-            leading=8,            textColor=muted,
+            fontSize=6.6 * 0.75,
+            leading=8 * 0.75,            textColor=muted,
             spaceAfter=1,
         ),
         "patient_value": ParagraphStyle(
             "patient_value",
             fontName=base_font,
-            fontSize=float(patient.get("font_size", 8.5)),
-            leading=float(patient.get("font_size", 8.5)) * max(0.8, float(patient.get("line_spacing", 1.25))),
+            fontSize=float(patient.get("font_size", 8.5)) * 0.75,
+            leading=float(patient.get("font_size", 8.5)) * max(0.8, float(patient.get("line_spacing", 1.25))) * 0.75,
             textColor=text,
         ),
         "patient_title": ParagraphStyle(
             "patient_title",
             fontName=_styled_font(layout, patient.get("title_style", "bold")),
-            fontSize=float(patient.get("title_size", 9)),
-            leading=float(patient.get("title_size", 9)) + 1,
+            fontSize=float(patient.get("title_size", 9)) * 0.75,
+            leading=(float(patient.get("title_size", 9)) + 1) * 0.75,
             textColor=_color(patient.get("title_color"), text),
             alignment=_alignment(patient.get("title_align", "left")),
         ),
@@ -290,15 +290,15 @@ def _paragraph_styles(layout):
         "table_header": ParagraphStyle(
             "table_header",
             fontName=bold_font,
-            fontSize=float(results.get("header_size", 7.5)),
-            leading=float(results.get("header_size", 7.5)) + 1,
+            fontSize=float(results.get("header_size", 7.5)) * 0.75,
+            leading=(float(results.get("header_size", 7.5)) + 1) * 0.75,
             textColor=text,
         ),
         "table_cell": ParagraphStyle(
             "table_cell",
             fontName=base_font,
-            fontSize=float(results.get("font_size", 9)),
-            leading=float(results.get("font_size", 9)) + 2,
+            fontSize=float(results.get("font_size", 9)) * 0.75,
+            leading=(float(results.get("font_size", 9)) + 2) * 0.75,
             textColor=text,
         ),
         "table_value": ParagraphStyle(
@@ -375,7 +375,7 @@ def _patient_block(patient, layout, styles, available_width):
     cols = min(cols, len(items))
     width_percent = float(cfg.get("width_percent", 100) or 100)
     block_width = available_width * width_percent / 100.0
-    gap = 7 * mm if cols == 2 else 0
+    gap = 7 * 0.75 if cols == 2 else 0
     col_width = (block_width - gap * (cols - 1)) / cols
 
     rows = []
@@ -421,10 +421,10 @@ def _patient_block(patient, layout, styles, available_width):
     border = _color(cfg.get("border"), colors.HexColor("#E1E5EC"))
 
     style_cmds = [
-        ("LEFTPADDING", (0, 0), (-1, -1), 11),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 11),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10 * 0.75),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10 * 0.75),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
     ]
 
@@ -443,13 +443,13 @@ def _patient_block(patient, layout, styles, available_width):
         rowHeights=[min_height] if min_height > 0 else None,
         hAlign="LEFT",
         style=TableStyle([
-            ("LEFTPADDING", (0, 0), (-1, -1), 11),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 11),
-            ("TOPPADDING", (0, 0), (-1, 0), 7),
-            ("BOTTOMPADDING", (0, 0), (-1, 0), 4),
+            ("LEFTPADDING", (0, 0), (-1, -1), 10 * 0.75),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 10 * 0.75),
+            ("TOPPADDING", (0, 0), (-1, 0), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 5 * 0.75),
             ("TOPPADDING", (0, 1), (-1, 1), 0),
-            ("BOTTOMPADDING", (0, 1), (-1, 1), 6),
-            ("LINEBELOW", (0, 0), (-1, 0), 0.6, border),
+            ("BOTTOMPADDING", (0, 1), (-1, 1), 0),
+            ("LINEBELOW", (0, 0), (-1, 0), 1 * 0.75, border),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("BACKGROUND", (0, 0), (-1, -1), bg)
             if cfg.get("style", "card") != "plain" and not cfg.get("transparent", False)
@@ -507,6 +507,7 @@ def _result_columns(layout, available_width):
         "reference_range": 0.24,
     }
     usable = available_width
+    weights = {"name":2.5,"value":1.0,"unit":1.0,"reference_range":1.4}
     raw = [weights.get(k, 1 / len(columns)) for k in columns]
     total = sum(raw) or 1
     return columns, [usable * w / total for w in raw]
@@ -552,13 +553,13 @@ def _result_table(title, rows, layout, styles, available_width):
         ("BACKGROUND", (0, 0), (-1, 0), header_bg),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        ("TOPPADDING", (0, 0), (-1, 0), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
-        ("TOPPADDING", (0, 1), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 1), (-1, -1), 5),
-        ("LINEBELOW", (0, 0), (-1, -1), 0.45, border),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6 * 0.75),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6 * 0.75),
+        ("TOPPADDING", (0, 0), (-1, 0), 5 * 0.75),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 5 * 0.75),
+        ("TOPPADDING", (0, 1), (-1, -1), 5 * 0.75),
+        ("BOTTOMPADDING", (0, 1), (-1, -1), 5 * 0.75),
+        ("LINEBELOW", (0, 0), (-1, -1), 1 * 0.75, border),
     ]
 
     for row_index in range(2, len(data), 2):
@@ -581,12 +582,12 @@ def _result_table(title, rows, layout, styles, available_width):
             "section_dynamic",
             parent=styles["section"],
             fontName=_styled_font(layout, results.get("section_style", "bold" if results.get("section_bold", True) else "normal")),
-            fontSize=float(results.get("section_font_size", 7.9)),
-            leading=float(results.get("section_font_size", 7.9)) + 1,
+            fontSize=float(results.get("section_font_size", 7.9)) * 0.75,
+            leading=(float(results.get("section_font_size", 7.9)) + 1) * 0.75,
             textColor=_color(results.get("section_text"), colors.black),
             alignment=_alignment(results.get("section_align", "left")),
         )
-        pad = max(2, float(results.get("section_padding", 5)))
+        pad = max(2, float(results.get("section_padding", 5))) * 0.75
         section_header = [
             Table(
                 [[Paragraph(str(title).upper(), section_style)]],
@@ -594,13 +595,13 @@ def _result_table(title, rows, layout, styles, available_width):
                 hAlign="LEFT",
                 style=TableStyle([
                     ("BACKGROUND", (0, 0), (-1, -1), section_bg),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 9),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 9),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 8 * 0.75),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 8 * 0.75),
                     ("TOPPADDING", (0, 0), (-1, -1), pad),
                     ("BOTTOMPADDING", (0, 0), (-1, -1), pad),
                 ]),
             ),
-            Spacer(1, 4),
+            Spacer(1, 4 * 0.75),
         ]
 
     return section_header + [table, Spacer(1, 9)]
@@ -754,8 +755,8 @@ def _build_story(data, layout, available_width):
         "report_title_dynamic",
         parent=styles["report_title"],
         fontName=_styled_font(layout, layout["results"].get("report_title_style", "bold")),
-        fontSize=float(layout["results"].get("report_title_size", 12)),
-        leading=float(layout["results"].get("report_title_size", 12)) + 2,
+        fontSize=float(layout["results"].get("report_title_size", 12)) * 0.75,
+        leading=(float(layout["results"].get("report_title_size", 12)) + 2) * 0.75,
         textColor=_color(layout["results"].get("report_title_color"), text_color),
         alignment=_alignment(layout["results"].get("report_title_align", "left")),
     )
@@ -764,15 +765,15 @@ def _build_story(data, layout, available_width):
         colWidths=[available_width],
         hAlign="LEFT",
         style=TableStyle([
-            ("LINEBELOW", (0, 0), (-1, -1), 1.3, _color(layout["results"].get("report_title_line_color"), accent)),
+            ("LINEBELOW", (0, 0), (-1, -1), 2 * 0.75, _color(layout["results"].get("report_title_line_color"), accent)),
             ("LEFTPADDING", (0, 0), (-1, -1), 0),
             ("RIGHTPADDING", (0, 0), (-1, -1), 0),
             ("TOPPADDING", (0, 0), (-1, -1), 0),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6 * 0.75),
         ]),
     )
     story.append(title_table)
-    story.append(Spacer(1, 8))
+    story.append(Spacer(1, 11 * 0.75))
 
     tests = data.get("tests") or []
     section_title = str(layout["results"].get("section_title") or "EXAMINATION RESULTS")
