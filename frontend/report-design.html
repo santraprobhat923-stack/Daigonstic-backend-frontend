@@ -27,7 +27,7 @@ textarea{resize:vertical;min-height:60px}
 .preview-label{font-size:12px;color:#687082;margin:0 0 8px}
 .paper{width:100%;aspect-ratio:210/297;background:#fff;border:1px solid #d9dce5;box-shadow:0 12px 35px #00000012;position:relative;overflow:hidden}
 .template-bg{position:absolute;inset:0;width:100%;height:100%;border:0;display:none;object-fit:fill;z-index:1;pointer-events:none}
-.overlay{position:absolute;left:10%;right:10%;top:31%;bottom:10%;overflow:visible;pointer-events:none;z-index:2}
+.overlay{position:absolute;left:10%;right:auto;top:31%;bottom:auto;width:var(--design-body-width,655px);height:var(--design-body-height,837px);overflow:visible;pointer-events:none;z-index:2;transform:scale(var(--design-body-scale,1));transform-origin:0 0}
 .patient{border:1px solid #e2e5ec;background:#f5f6f8;border-radius:7px;padding:10px;position:relative;z-index:3;will-change:transform;user-select:none}
 .patient-title{font-size:9px;font-weight:700;border-bottom:1px solid #ddd;padding-bottom:5px;margin-bottom:7px}
 .patient-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
@@ -49,7 +49,7 @@ textarea{resize:vertical;min-height:60px}
 }
 @media(max-width:520px){
  .grid,.checks{grid-template-columns:1fr}
- .overlay{left:7%;right:7%;top:30%;bottom:8%}
+ .overlay{left:10%;right:auto;top:31%;bottom:auto}
 }
 </style>
 </head>
@@ -303,6 +303,6 @@ textarea{resize:vertical;min-height:60px}
 
 </main>
 
-<script src="/static/js/report-design.js?v=20261001-5"></script>
+<script src="/static/js/report-design.js?v=20261002-1"></script>
 </body>
 </html>
