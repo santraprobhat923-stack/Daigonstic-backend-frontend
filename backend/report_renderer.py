@@ -612,6 +612,38 @@ def _result_table(title, rows, layout, styles, available_width):
     return section_header + [table, Spacer(1, 9)]
 
 
+def _dynamic_test_type(data, grouped_tests):
+    """Resolve the report's clinical test type for the dynamic section header."""
+    report = data.get("report") or {}
+    candidates = [
+        data.get("test_type"),
+        data.get("testType"),
+        data.get("examination"),
+        report.get("test_type"),
+        report.get("testType"),
+        report.get("examination"),
+        report.get("title"),
+        report.get("department"),
+    ]
+    generic = {
+        "laboratory report",
+        "report",
+        "examination results",
+        "results",
+        "laboratory",
+        "lab report",
+    }
+    for candidate in candidates:
+        value = str(candidate or "").strip()
+        if value and value.lower() not in generic:
+            return value.upper()
+    for section, _rows in grouped_tests:
+        value = str(section or "").strip()
+        if value and value.lower() not in generic and value.lower() != "unclassified results":
+            return value.upper()
+    return "EXAMINATION RESULTS"
+
+
 def _group_tests(tests, layout=None):
     groups = {}
     discovered = []
@@ -781,9 +813,12 @@ def _build_story(data, layout, available_width):
     story.append(Spacer(1, 11 * 0.75))
 
     tests = data.get("tests") or []
-    section_title = str(layout["results"].get("section_title") or "EXAMINATION RESULTS")
-    for section, rows in _group_tests(tests, layout):
-        story.extend(_result_table(section_title if len(_group_tests(tests, layout)) == 1 else section, rows, layout, styles, available_width))
+    grouped_tests = _group_tests(tests, layout)
+    dynamic_test_type = _dynamic_test_type(data, grouped_tests)
+    for section, rows in grouped_tests:
+        # The secondary header identifies the incoming report/test type.
+        # Its typography remains entirely controlled by the saved designer settings.
+        story.extend(_result_table(dynamic_test_type, rows, layout, styles, available_width))
 
     if not tests:
         story.append(
