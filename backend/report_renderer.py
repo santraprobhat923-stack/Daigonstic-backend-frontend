@@ -494,12 +494,10 @@ def _patient_block(patient, layout, styles, available_width):
     # shifted by the flow engine.
     _, patient_height = outer.wrap(block_width, 1000000)
 
-    # The preview has a 7px bottom gap between the patient block and the
-    # report flow. Keep that gap in the same CSS-pixel coordinate system.
-    preview_gap = 7.0 * px_to_pt
-    extra = max(0.0, float(cfg.get("top_spacing", 0) or 0) * px_to_pt)
-
-    return [positioned, Spacer(1, y_offset + patient_height + preview_gap + extra)]
+    # The report flow starts immediately after the measured patient block.
+    # Do not inject a fixed gap or hidden top-spacing value: the saved
+    # designer position is the only positional adjustment.
+    return [positioned, Spacer(1, y_offset + patient_height)]
 
 
 def _result_columns(layout, available_width):
