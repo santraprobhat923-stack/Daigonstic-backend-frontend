@@ -85,6 +85,16 @@ function syncLegacyChecks(){
  });
 }
 
+function livePatientLabels(){
+ const labels={};
+ fieldDefs.forEach(([,key,label])=>{
+  const input=$("label_"+key);
+  const value=String(input?.value ?? "").trim();
+  labels[key]=value||label;
+ });
+ return labels;
+}
+
 function pagePoints(size){
  const sizes={A4:[595.2756,841.8898],A5:[419.5276,595.2756],LETTER:[612,792],LEGAL:[612,1008]};
  return sizes[String(size||"A4").toUpperCase()]||sizes.A4;
@@ -129,6 +139,7 @@ function renderPreview(){
   p.visible=[...defaults.patient.visible];
   p.labels={...defaults.patient.labels,...(p.labels||{})};
  }
+ const liveLabels=livePatientLabels();
  applyPageGeometry(l);
  const pv=$("pvPatient");pv.innerHTML="";
  fieldDefs.forEach(([check,key,label,value])=>{
@@ -136,7 +147,7 @@ function renderPreview(){
   const visible=checkbox ? checkbox.checked : p.visible.includes(key);
   if(!visible)return;
   const d=document.createElement("div");d.className="pv";
-  d.innerHTML="<b>"+(p.labels[key]||label)+"</b><span>"+value+"</span>";
+  d.innerHTML="<b>"+liveLabels[key]+"</b><span>"+value+"</span>";
   pv.appendChild(d);
  });
  pv.style.gridTemplateColumns=$( "patientCols").value==="1"?"1fr":"1fr 1fr";
