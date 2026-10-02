@@ -140,7 +140,7 @@ function renderPreview(){
  });
  pv.style.gridTemplateColumns=$( "patientCols").value==="1"?"1fr":"1fr 1fr";
  pv.style.rowGap=(Number($( "patientRowGap").value)||0)+"px";
- const paper=$( "paper");paper.style.fontFamily=$( "font").value;paper.style.color=l.appearance.text||"#151A2D";
+ const paper=$( "paper");\n const previewFont=$( "font").value||"Helvetica";\n paper.style.fontFamily=previewFont;paper.style.color=l.appearance.text||"#151A2D";
  const patient=$( "patientBlock"),flow=$( "reportFlow"),pos=p.position||{x:0,y:0};
  patient.style.transform="translate("+(Number(pos.x)||0)+"px, "+(Number(pos.y)||0)+"px)";
  syncReportFlowPosition(l);
@@ -160,13 +160,13 @@ function renderPreview(){
  pt.style.fontSize=$( "patientTitleSize").value+"px";pt.style.color=$( "patientTitleColor").value;
  pt.style.fontWeight=["bold","bold_italic"].includes($( "patientTitleStyle").value)?"700":"400";
  pt.style.fontStyle=["italic","bold_italic"].includes($( "patientTitleStyle").value)?"italic":"normal";
- const rt=$( "reportTitleBlock");rt.textContent=($( "reportTitleText").value||"LABORATORY REPORT").toUpperCase();
- rt.style.textAlign=$( "reportTitleAlign").value;rt.style.fontSize=$( "reportTitleSize").value+"px";rt.style.color=$( "reportTitleColor").value;
+ const rt=$( "reportTitleBlock");rt.textContent=$( "reportTitleText").value||"LABORATORY REPORT";
+ rt.style.fontFamily=previewFont;rt.style.textAlign=$( "reportTitleAlign").value;rt.style.fontSize=$( "reportTitleSize").value+"px";rt.style.color=$( "reportTitleColor").value;
  rt.style.fontWeight=["bold","bold_italic"].includes($( "reportTitleStyle").value)?"700":"400";
  rt.style.fontStyle=["italic","bold_italic"].includes($( "reportTitleStyle").value)?"italic":"normal";
  rt.style.borderBottomColor=$( "reportTitleLineColor").value;
- const sec=$( "reportSectionBlock");sec.textContent=($( "sectionTitleText").value||"EXAMINATION RESULTS").toUpperCase();
- sec.style.textAlign=$( "sectionAlign").value;sec.style.fontSize=$( "sectionSize").value+"px";sec.style.color=$( "sectionColor").value;
+ const sec=$( "reportSectionBlock");sec.textContent=$( "sectionTitleText").value||"EXAMINATION RESULTS";
+ sec.style.fontFamily=previewFont;sec.style.textAlign=$( "sectionAlign").value;sec.style.fontSize=$( "sectionSize").value+"px";sec.style.color=$( "sectionColor").value;
  sec.style.background=$( "sectionBg").value;
  sec.style.fontWeight=["bold","bold_italic"].includes($( "sectionStyle").value)?"700":"400";
  sec.style.fontStyle=["italic","bold_italic"].includes($( "sectionStyle").value)?"italic":"normal";
@@ -176,7 +176,7 @@ function renderPreview(){
   x.style.paddingTop=$( "rowSpacing").value+"px";
   x.style.paddingBottom=$( "rowSpacing").value+"px";
   x.style.border=$( "gridStyle").checked?"1px solid #dfe3ec":"";
-  x.querySelectorAll("span").forEach(cell=>cell.style.fontSize=resultFontSize+"px");
+  x.querySelectorAll("span").forEach(cell=>{cell.style.fontFamily=previewFont;cell.style.fontSize=resultFontSize+"px";});
  });
 }
 
