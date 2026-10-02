@@ -295,7 +295,24 @@ def verify(rid:int,data:str=Form(...),c=Depends(current),db:Session=Depends(get_
     if r.status=="GENERATED": return report_dict(r)
     if r.status!="OCR_REVIEW": raise HTTPException(409,"Report is not ready for verification")
     if c.credits<1: raise HTTPException(400,"Insufficient credits")
-    try:d=json.loads(data)\n    except: raise HTTPException(400,"Invalid verification data")\n    # Recompute abnormality from the technician-approved value/reference pair\n    # immediately before PDF generation so stale AI flags cannot leak into the final report.\n    try:\n        from .cloudflare_ai import abnormal as _abnormal_status\n        for test in d.get("tests") or []:\n            if isinstance(test,dict):\n                test["abnormal_status"]=_abnormal_status(test.get("value",""),test.get("reference_range",""))\n                test["abnormal"]=test["abnormal_status"] in {"LOW","HIGH","ABNORMAL"}\n    except Exception:\n        pass\n    data=json.dumps(d,ensure_ascii=False)\n    out=STORAGE_DIR/f"centre_{c.id}"/"reports"/f"report_{r.id}.pdf"; make_pdf(c,r,d,out)
+    try:
+        d=json.loads(data)
+    except Exception:
+        raise HTTPException(400,"Invalid verification data")
+    # Recompute abnormality from the technician-approved value/reference pair
+    # immediately before PDF generation so stale AI flags cannot leak into the final report.
+    try:
+        from .cloudflare_ai import abnormal as _abnormal_status
+        for test in d.get("tests") or []:
+            if isinstance(test,dict):
+                test["abnormal_status"]=_abnormal_status(
+                    test.get("value",""),
+                    test.get("reference_range",""),
+                )
+                test["abnormal"]=test["abnormal_status"] in {"LOW","HIGH","ABNORMAL"}
+    except Exception:
+        pass
+    data=json.dumps(d,ensure_ascii=False)\n    out=STORAGE_DIR/f"centre_{c.id}"/"reports"/f"report_{r.id}.pdf"; make_pdf(c,r,d,out)
     c.credits-=1
     db.add(CreditTransaction(centre_id=c.id,type="REPORT_USAGE",credits=-1,amount_inr=0,reference=f"report_{r.id}"))
     r.verified_data=data; p=d.get("patient",{}); r.patient_name=p.get("name",""); r.patient_age=p.get("age",""); r.patient_sex=p.get("sex",""); r.patient_phone=p.get("phone",""); r.patient_code=p.get("code",""); r.pdf_path=str(out); r.status="GENERATED"; r.payment="PENDING" if c.whatsapp_enabled else "NOT_REQUIRED"
