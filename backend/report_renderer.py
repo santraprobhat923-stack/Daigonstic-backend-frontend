@@ -319,28 +319,44 @@ def _paragraph_styles(layout):
 
 
 class _PatientPositioned(Flowable):
+    """
+    Draw a fixed designer element at an absolute page position.
+
+    The browser designer uses the top-left of the body overlay as its
+    coordinate origin. ReportLab uses a bottom-left page origin. This class
+    deliberately returns zero flow height so Platypus can never move the
+    patient block, while drawOn() converts the saved designer x/y to the
+    exact PDF position.
+    """
     def __init__(self, content, x=0, y=0):
         Flowable.__init__(self)
         self.content = content
         self.x = float(x or 0)
         self.y = float(y or 0)
+        self._w = 0
+        self._h = 0
 
     def wrap(self, availWidth, availHeight):
-        w, h = self.content.wrap(availWidth, availHeight)
-
-        # Designer coordinates are absolute. Never clamp them to the frame
-        # and never convert an explicit offset into additional flow height.
+        w, h = self.content.wrap(availWidth, 1000000)
         self._w = w
         self._h = h
-        return w, h
+        # IMPORTANT: this element must not participate in Platypus flow.
+        return 0, 0
 
-    def draw(self):
-        self.canv.saveState()
-        # Platypus places the flowable at the frame origin. The browser
-        # preview measures Y downward, so translate by -Y in PDF coordinates.
-        self.canv.translate(self.x, -self.y)
-        self.content.drawOn(self.canv, 0, 0)
-        self.canv.restoreState()
+    def drawOn(self, canv, _x, _y, _sW=0):
+        if not self._w and not self._h:
+            self.wrap(0, 0)
+
+        frame = getattr(self, "_frame", None)
+        if frame is None:
+            raise RuntimeError("Patient positioning requires an active report frame")
+
+        # frame.x1 is the designer overlay's left edge.
+        # frame.y2 is the designer overlay's top edge.
+        pdf_x = frame.x1 + self.x
+        pdf_y = frame.y2 - self.y - self._h
+
+        self.content.drawOn(canv, pdf_x, pdf_y, _sW=0)
 
 
 def _patient_block(patient, layout, styles, available_width):
@@ -448,14 +464,27 @@ def _patient_block(patient, layout, styles, available_width):
     # TableStyle commands additively, so an empty replacement would erase the
     # exact background, border, padding and alignment rules above.
 
-    top_spacing = float(cfg.get("top_spacing", 0) or 0)
     position = cfg.get("position") or {}
-    # The only coordinate conversion is CSS px -> PDF points (96 -> 72).
-    x_offset = float(position.get("x", 0) or 0) * 72.0 / 96.0
-    y_offset = float(position.get("y", 0) or 0) * 72.0 / 96.0
+    # The designer stores drag coordinates in CSS pixels. PDF coordinates
+    # are points, so every saved x/y value is converted exactly once.
+    px_to_pt = 72.0 / 96.0
+    x_offset = float(position.get("x", 0) or 0) * px_to_pt
+    y_offset = float(position.get("y", 0) or 0) * px_to_pt
 
     positioned = _PatientPositioned(outer, x_offset, y_offset)
-    return [Spacer(1, top_spacing), positioned, Spacer(1, 2)]
+
+    # Measure once so the report cursor can start immediately after the
+    # fixed patient block, exactly as the browser preview does. The patient
+    # itself remains zero-height to Platypus and therefore can never be
+    # shifted by the flow engine.
+    _, patient_height = outer.wrap(block_width, 1000000)
+
+    # The preview has a 7px bottom gap between the patient block and the
+    # report flow. Keep that gap in the same CSS-pixel coordinate system.
+    preview_gap = 7.0 * px_to_pt
+    extra = max(0.0, float(cfg.get("top_spacing", 0) or 0) * px_to_pt)
+
+    return [positioned, Spacer(1, y_offset + patient_height + preview_gap + extra)]
 
 
 def _result_columns(layout, available_width):
@@ -755,12 +784,12 @@ def _build_story(data, layout, available_width):
 
 def render_body(data, layout=None):
     """
-    Render the dynamic Aarogyam report body using ReportLab's flowable
-    document engine.
+    Render the dynamic Aarogyam report body.
 
-    This intentionally avoids hand-managed Y coordinates. Tables can split
-    across pages, repeat their headers, and grow for wrapped values/reference
-    ranges. The caller can still merge this body onto a centre PDF template.
+    Fixed designer elements are drawn with absolute coordinates. The result
+    tables remain flowable so long result sets can paginate, but the fixed
+    patient block and the report's starting position are never allowed to
+    move because another flowable changed height.
     """
     layout = _merge_layout(layout)
     body = BytesIO()
