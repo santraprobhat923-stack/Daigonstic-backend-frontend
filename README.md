@@ -269,6 +269,51 @@ A **Credits & Recharge** section is available in the desktop sidebar and mobile 
 - Add/verify database and file backups.
 - Perform a production security review: auth, tenant isolation, rate limits, file validation and token handling.
 
+
+## Latest Standard Report Designer fixes — 2 Oct 2026
+
+The global Standard Report Designer has been hardened for patient-field customization.
+
+### Editable Field Labels
+Administrators can customize the display text for patient credentials in the Editable Field Labels section, for example:
+- Patient Name → Name
+- Patient ID → UID
+- UHID → any centre-preferred display label
+
+Custom labels are stored under the tenant's existing report_layout.patient.labels configuration and are restored when the designer is reopened.
+
+### Live preview binding
+The patient-information preview now reads the current Editable Field Labels inputs directly on every preview render. Typing into a label field updates the corresponding preview label immediately without requiring Save.
+
+Patient-field visibility checkboxes remain independently reactive: checking/unchecking a credential updates the live preview.
+
+### Data/logic safety
+Editable labels are presentation-only:
+- They do not rename database fields.
+- They do not change OCR extraction keys.
+- They do not change verified patient data.
+- They do not change backend patient-field mappings.
+- They do not affect report values; only the printed/displayed label changes.
+
+The existing underlying keys remain:
+name, age_gender, code, uhid, referred_by, received_on, reported_on, phone.
+
+### Persistence
+Saving the Standard Report Design continues to send the complete report_layout JSON through PUT /api/settings. The customized patient labels are therefore part of the centre's global tenant-scoped template configuration and are applied to future generated reports.
+
+### UI/cache fixes included
+- Editable Field Label inputs are full-width/block inputs rather than tiny/shrunken controls.
+- The redundant manual Examination Results text control was removed.
+- The result-section heading now derives dynamically from the incoming report/test type in the backend renderer while preserving the configured alignment, font size, bold/italic style, text colour and background.
+- Report designer frontend cache was bumped to 20261002-10.
+
+### Git checkpoint
+Latest report-designer commits:
+- ad6dc87 — fix live editable patient label preview binding.
+- 860a7b5 — bump report designer cache version.
+
+After pulling the latest main branch, restart the Aarogyam service and hard-refresh the browser before testing the Standard Report Designer.
+
 ## Development rule
 Whenever workflow, architecture, API, database, deployment or important implementation changes, update this README in the same change.
 
