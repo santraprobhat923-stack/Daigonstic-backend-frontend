@@ -167,7 +167,9 @@ function renderPreview(){
  rt.style.fontWeight=["bold","bold_italic"].includes($( "reportTitleStyle").value)?"700":"400";
  rt.style.fontStyle=["italic","bold_italic"].includes($( "reportTitleStyle").value)?"italic":"normal";
  rt.style.borderBottomColor=$( "reportTitleLineColor").value;
- const sec=$( "reportSectionBlock");sec.textContent=$( "sectionTitleText").value||"EXAMINATION RESULTS";
+ const sec=$( "reportSectionBlock");
+ const previewTestType=String(r.test_type||r.testType||r.examination||r.title||"").trim();
+ sec.textContent=previewTestType||"TEST TYPE";
  sec.style.fontFamily=previewFont;sec.style.textAlign=$( "sectionAlign").value;sec.style.fontSize=$( "sectionSize").value+"px";sec.style.color=$( "sectionColor").value;
  sec.style.background=$( "sectionBg").value;
  sec.style.fontWeight=["bold","bold_italic"].includes($( "sectionStyle").value)?"700":"400";
