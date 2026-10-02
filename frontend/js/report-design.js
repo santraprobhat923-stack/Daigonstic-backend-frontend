@@ -132,7 +132,8 @@ function renderPreview(){
  applyPageGeometry(l);
  const pv=$("pvPatient");pv.innerHTML="";
  fieldDefs.forEach(([check,key,label,value])=>{
-  const visible=p.visible.includes(key);
+  const checkbox=$(check);
+  const visible=checkbox ? checkbox.checked : p.visible.includes(key);
   if(!visible)return;
   const d=document.createElement("div");d.className="pv";
   d.innerHTML="<b>"+(p.labels[key]||label)+"</b><span>"+value+"</span>";
