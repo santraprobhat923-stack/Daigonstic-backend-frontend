@@ -258,9 +258,7 @@ def upload(background_tasks:BackgroundTasks,files:list[UploadFile]=File(...),c=D
         "ocr_status":"PROCESSING"
     }
 
-def awaitable_read(f):
-    return f.file.read()
-@app.post("/api/reports/{rid}/verify")
+def awaitable_read(f):\n    return f.file.read()\n\n@app.get("/api/reports/{rid}/source")\ndef report_source(rid:int,c=Depends(current),db:Session=Depends(get_db)):\n    r=db.get(Report,rid)\n    if not r or r.centre_id!=c.id: raise HTTPException(404,"Report not found")\n    try: paths=json.loads(r.image_paths or "[]")\n    except Exception: paths=[]\n    if not paths: raise HTTPException(404,"Source document unavailable")\n    p=Path(paths[0])\n    if not p.is_file(): raise HTTPException(404,"Source document unavailable")\n    suffix=p.suffix.lower()\n    media={".pdf":"application/pdf",".jpg":"image/jpeg",".jpeg":"image/jpeg",".png":"image/png",".webp":"image/webp",".bmp":"image/bmp",".tif":"image/tiff",".tiff":"image/tiff"}.get(suffix,"application/octet-stream")\n    return FileResponse(p,media_type=media,filename=p.name)\n@app.post("/api/reports/{rid}/verify")
 def verify(rid:int,data:str=Form(...),c=Depends(current),db:Session=Depends(get_db)):
     r=db.get(Report,rid)
     if not r or r.centre_id!=c.id: raise HTTPException(404,"Report not found")
