@@ -1,4 +1,4 @@
-import base64,hashlib,json,re,secrets,shutil,subprocess
+import hashlib,json,re,secrets
 from difflib import SequenceMatcher
 from pathlib import Path
 from PIL import Image
@@ -431,150 +431,12 @@ def queue_wa(db,centre,report,kind,payload):
     if db.query(WAJob).filter_by(report_id=report.id,kind=kind).first(): return
     db.add(WAJob(centre_id=centre.id,report_id=report.id,kind=kind,payload=json.dumps(payload)))
 
-def _pdfme_input_value(schema, data):
-    """Map verified report data onto a saved pdfme schema without changing geometry."""
-    patient=data.get("patient") or {}
-    report=data.get("report") or {}
-    key=str(schema.get("name") or "").strip().lower()
-    compact=re.sub(r"[^a-z0-9]+","_",key).strip("_")
-
-    def age_gender():
-        age=str(patient.get("age") or "").strip()
-        sex=str(patient.get("sex") or "").strip()
-        return " / ".join(x for x in (age, sex.upper()) if x)
-
-    values={
-        "patient_name":str(patient.get("name") or ""),
-        "patient_age":str(patient.get("age") or ""),
-        "patient_sex":str(patient.get("sex") or ""),
-        "patient_gender":str(patient.get("sex") or ""),
-        "patient_age_gender":age_gender(),
-        "patient_id":str(patient.get("code") or ""),
-        "patient_code":str(patient.get("code") or ""),
-        "patient_uhid":str(patient.get("uhid") or ""),
-        "patient_referred_by":str(patient.get("referred_by") or ""),
-        "patient_received_on":str(patient.get("received_on") or ""),
-        "patient_reported_on":str(patient.get("reported_on") or ""),
-        "patient_phone":str(patient.get("phone") or ""),
-        "report_date":str(patient.get("reported_on") or ""),
-        "department":str(report.get("department") or ""),
-        "report_department":str(report.get("department") or ""),
-        "report_title":str(report.get("title") or ""),
-        "title":str(report.get("title") or ""),
-    }
-
-    if compact in values:
-        value=values[compact]
-        # The starter template uses the schema content as the field label.
-        # Keep that label inline so the saved schema remains the visual source
-        # of truth while the value becomes dynamic.
-        if schema.get("type") == "text" and str(schema.get("content") or "").strip():
-            label=str(schema.get("content") or "").strip()
-            if label and label.lower() != value.lower():
-                return f"{label} : {value}" if value else label
-        return value
-
-    if compact in {"results_table","result_table","laboratory_results","examination_results","tests_table"}:
-        return json.dumps(_pdfme_result_matrix(data))
-
-    content=str(schema.get("content") or "")
-    # Support simple explicit placeholders in text schemas while preserving
-    # every other saved character and property.
-    replacements={
-        "{{patient.name}}":str(patient.get("name") or ""),
-        "{{patient.age}}":str(patient.get("age") or ""),
-        "{{patient.sex}}":str(patient.get("sex") or ""),
-        "{{patient.phone}}":str(patient.get("phone") or ""),
-        "{{patient.id}}":str(patient.get("code") or ""),
-        "{{patient.code}}":str(patient.get("code") or ""),
-        "{{patient.uhid}}":str(patient.get("uhid") or ""),
-        "{{patient.referred_by}}":str(patient.get("referred_by") or ""),
-        "{{patient.received_on}}":str(patient.get("received_on") or ""),
-        "{{patient.reported_on}}":str(patient.get("reported_on") or ""),
-        "{{report.department}}":str(report.get("department") or ""),
-        "{{report.title}}":str(report.get("title") or ""),
-    }
-    for token,value in replacements.items():
-        content=content.replace(token,value)
-    return content
-
-
-def _pdfme_result_matrix(data):
-    rows=data.get("tests") or []
-    matrix=[["TEST","RESULT","UNIT","REFERENCE"]]
-    for row in rows:
-        matrix.append([
-            str(row.get("name") or ""),
-            str(row.get("value") or ""),
-            str(row.get("unit") or ""),
-            str(row.get("reference_range") or ""),
-        ])
-    return matrix
-
-
-def _render_pdfme(centre, data, out, pdfme_template):
-    if not centre.template_path or not Path(centre.template_path).exists():
-        raise ValueError("PDFMe master template requires an uploaded centre PDF letterhead")
-
-    node=shutil.which("node")
-    if not node:
-        raise RuntimeError("PDFMe server renderer is not installed: Node.js is required on the server")
-
-    base_bytes=Path(centre.template_path).read_bytes()
-    base_b64=base64.b64encode(base_bytes).decode("ascii")
-
-    # pdfme's saved schema coordinates are already in millimetres. Do not
-    # convert, clamp, scale, reflow, or otherwise reinterpret them.
-    schemas=pdfme_template.get("schemas") or []
-    inputs=[]
-    for page_schemas in schemas:
-        page_input={}
-        for schema in page_schemas or []:
-            name=str(schema.get("name") or "")
-            if not name:
-                continue
-            page_input[name]=_pdfme_input_value(schema,data)
-        inputs.append(page_input)
-
-    if not inputs:
-        inputs=[{}]
-
-    job={
-        "template":{"schemas":schemas},
-        "basePdf":base_b64,
-        "inputs":inputs,
-        "output":str(out),
-    }
-
-    root=Path(__file__).resolve().parent.parent
-    runtime=root/"pdfme"
-    result=subprocess.run(
-        [node,str(runtime/"render.mjs")],
-        input=json.dumps(job),
-        text=True,
-        capture_output=True,
-        timeout=90,
-    )
-    if result.returncode != 0:
-        detail=(result.stderr or result.stdout or "PDFMe generation failed").strip()
-        raise RuntimeError(f"PDFMe generation failed: {detail[-1200:]}")
-
-
 def make_pdf(centre,report,data,out):
-    """Generate the report through Aarogyam's custom ReportLab renderer.
-
-    The current product uses the lightweight custom Report Design editor.
-    Saved layout coordinates are rendered by report_renderer.py; no PDFMe or
-    Node.js runtime is involved in report approval.
-    """
+    """Generate the report through Aarogyam's custom Report Design renderer."""
     try:
         layout=json.loads(centre.report_layout or "{}")
     except Exception:
         layout={}
-
-    # The custom renderer is the single authoritative report-generation path.
-    # Never route approval through legacy PDFMe data, even if an old layout
-    # record still contains a stale pdfme_template key.
     make_pdf_body_on_template(centre.template_path, data, out, layout)
 
 def report_dict(r):
