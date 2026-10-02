@@ -195,24 +195,31 @@ def _page_size(layout):
 
 def _metrics(layout):
     """
-    Return the report body frame using the same normalized geometry as the
-    web report designer preview.
+    Return the report body frame from the saved page settings.
 
-    The designer currently uses:
-      left/right = 10% of page width
-      top = 31% of page height
-      bottom = 10% of page height
-
-    Keeping this geometry in the PDF renderer prevents the generated body
-    from falling back to the old fixed 52/132/82 point margins.
+    The designer and PDF compiler use the same page coordinates:
+      left/right/bottom are distances from the corresponding page edges,
+      top is the distance down from the top edge.
+    ReportLab uses points and a bottom-left origin, so the top margin is
+    converted to a bottom-based frame boundary here.
     """
-    _, page_h = _page_size(layout)
-    page_w, _ = _page_size(layout)
+    page_w, page_h = _page_size(layout)
+    page = layout.get("page") or {}
 
-    left = page_w * 0.10
-    right = page_w * 0.10
-    top_offset = page_h * 0.31
-    bottom = page_h * 0.10
+    left = max(0, float(page.get("left", 52) or 0))
+    right = max(0, float(page.get("right", 52) or 0))
+    top_offset = max(0, float(page.get("top", 132) or 0))
+    bottom = max(0, float(page.get("bottom", 82) or 0))
+
+    # Never create a negative/invalid frame if a saved layout is malformed.
+    if left + right >= page_w:
+        scale = max(0, (page_w - 1) / max(1, left + right))
+        left *= scale
+        right *= scale
+    if top_offset + bottom >= page_h:
+        scale = max(0, (page_h - 1) / max(1, top_offset + bottom))
+        top_offset *= scale
+        bottom *= scale
 
     return left, right, page_h - top_offset, bottom
 
@@ -247,8 +254,7 @@ def _paragraph_styles(layout):
             "patient_label",
             fontName=bold_font if patient.get("label_bold", True) else base_font,
             fontSize=6.6,
-            leading=8,
-            textColor=muted,
+            leading=8,            textColor=muted,
             spaceAfter=1,
         ),
         "patient_value": ParagraphStyle(
@@ -455,7 +461,9 @@ def _patient_block(patient, layout, styles, available_width):
             else ("BOX", (0, 0), (-1, -1), 0, colors.white),
         ]),
     )
-    outer.setStyle(TableStyle([]))
+    # Do not replace the table style after construction. ReportLab applies
+    # TableStyle commands additively, so an empty replacement would erase the
+    # exact background, border, padding and alignment rules above.
 
     top_spacing = max(0, float(cfg.get("top_spacing", 0) or 0))
     position = cfg.get("position") or {}
@@ -497,8 +505,7 @@ def _result_table(title, rows, layout, styles, available_width):
     for row in rows:
         data.append([
             Paragraph(
-                _safe_text(row.get(key, "")),
-                value_style if key == "value" else text_style,
+                _safe_text(row.get(key, "")),                value_style if key == "value" else text_style,
             )
             for key in columns
         ])
@@ -747,8 +754,7 @@ def _build_story(data, layout, available_width):
     story.append(title_table)
     story.append(Spacer(1, 8))
 
-    tests = data.get("tests") or []
-    section_title = str(layout["results"].get("section_title") or "EXAMINATION RESULTS")
+    tests = data.get("tests") or []    section_title = str(layout["results"].get("section_title") or "EXAMINATION RESULTS")
     for section, rows in _group_tests(tests, layout):
         story.extend(_result_table(section_title if len(_group_tests(tests, layout)) == 1 else section, rows, layout, styles, available_width))
 
@@ -797,35 +803,3 @@ def make_pdf_body_on_template(template_path, data, out, layout=None):
     """
     Generate the dynamic multi-page report body and overlay it on the
     centre's uploaded PDF template.
-
-    When a centre template exists, its first-page dimensions become the
-    report page dimensions so the body cannot drift because of a different
-    designer page-size selection.
-    """
-    effective_layout = _merge_layout(layout)
-    base = None
-    if template_path and Path(template_path).exists():
-        base = PdfReader(template_path)
-        if not base.pages:
-            raise ValueError("Centre template PDF has no pages")
-        box = base.pages[0].mediabox
-        effective_layout["page"]["width"] = float(box.width)
-        effective_layout["page"]["height"] = float(box.height)
-        effective_layout["manual"] = {}
-
-    body = render_body(data, effective_layout)
-    out.parent.mkdir(parents=True, exist_ok=True)
-
-    if base is not None:
-        overlay = PdfReader(body)
-        writer = PdfWriter()
-        for index, overlay_page in enumerate(overlay.pages):
-            base_page = base.pages[index] if index < len(base.pages) else base.pages[-1]
-            page = base_page
-            page.merge_page(overlay_page)
-            writer.add_page(page)
-        with open(out, "wb") as f:
-            writer.write(f)
-    else:
-        out.write_bytes(body.read())
-
