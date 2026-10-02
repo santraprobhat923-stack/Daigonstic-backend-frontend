@@ -21,7 +21,7 @@ textarea{resize:vertical;min-height:60px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .checks{display:grid;grid-template-columns:1fr 1fr;gap:7px}
 .checks label{display:flex;align-items:center;gap:7px;background:#f7f8fb;border-radius:8px;padding:8px;margin:0;color:#343a49}
-.checks input{width:auto}.field-labels{display:grid;gap:7px}.field-label-row{display:grid;grid-template-columns:24px 1fr;gap:8px;align-items:center}.field-label-row input[type=text]{padding:7px 8px}.field-label-row input[type=checkbox]{width:auto}
+.checks input{width:auto}.field-labels{display:grid;gap:7px}.field-label-row{display:block;width:100%}.field-label-row input[type=text]{display:block;width:100%;min-width:0;padding:8px 10px}
 .preview-wrap{display:flex;justify-content:center;align-items:flex-start}
 .preview-frame{width:min(100%,680px)}
 .preview-label{font-size:12px;color:#687082;margin:0 0 8px}
@@ -185,7 +185,6 @@ textarea{resize:vertical;min-height:60px}
    <div><label>Report title style</label><select id="reportTitleStyle"><option value="bold">Bold</option><option value="normal">Normal</option><option value="italic">Italic</option><option value="bold_italic">Bold Italic</option></select></div>
    <div><label>Report title color</label><input id="reportTitleColor" type="color" value="#151A2D"></div>
    <div><label>Report title line color</label><input id="reportTitleLineColor" type="color" value="#5F52E8"></div>
-   <div><label>Examination Results text</label><input id="sectionTitleText" type="text" value="EXAMINATION RESULTS"></div>
    <div><label>Section Font Size</label><input id="sectionSize" type="number" min="7" max="18" step=".5" value="8"></div>
    <div><label>Section alignment</label><select id="sectionAlign"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></div>
    <div><label>Section style</label><select id="sectionStyle"><option value="bold">Bold</option><option value="normal">Normal</option><option value="italic">Italic</option><option value="bold_italic">Bold Italic</option></select></div>
@@ -299,6 +298,6 @@ textarea{resize:vertical;min-height:60px}
 
 </main>
 
-<script src="/static/js/report-design.js?v=20261002-8"></script>
+<script src="/static/js/report-design.js?v=20261002-9"></script>
 </body>
 </html>
