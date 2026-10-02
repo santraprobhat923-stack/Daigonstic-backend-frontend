@@ -754,7 +754,8 @@ def _build_story(data, layout, available_width):
     story.append(title_table)
     story.append(Spacer(1, 8))
 
-    tests = data.get("tests") or []    section_title = str(layout["results"].get("section_title") or "EXAMINATION RESULTS")
+    tests = data.get("tests") or []
+    section_title = str(layout["results"].get("section_title") or "EXAMINATION RESULTS")
     for section, rows in _group_tests(tests, layout):
         story.extend(_result_table(section_title if len(_group_tests(tests, layout)) == 1 else section, rows, layout, styles, available_width))
 
