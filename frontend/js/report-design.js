@@ -111,6 +111,20 @@ function applyPageGeometry(layout){
  overlay.style.transform="scale("+bodyScale+")";
  overlay.dataset.scale=String(bodyScale);
 }
+function syncReportFlowPosition(layout){
+ const p=layout.patient||{};
+ const patient=$( "patientBlock"),flow=$( "reportFlow");
+ if(!patient||!flow)return;
+ const x=Number(p.position?.x)||0;
+ const y=Number(p.position?.y)||0;
+ const gap=7;
+ const topSpacing=Math.max(0,Number(layout.page?.top_spacing ?? layout.patient?.top_spacing ?? layout.results?.top_spacing ?? 0)||0);
+ // The patient keeps its normal layout height while its visual position is
+ // translated. Start the report after that real height, plus the saved Y
+ // offset and the same gap used by the PDF renderer.
+ flow.style.transform="translate("+x+"px, "+(y+patient.offsetHeight+gap+topSpacing)+"px)";
+}
+
 function renderPreview(){
  const l=merge(settings.report_layout||{}),p=l.patient,r=l.results;
  applyPageGeometry(l);
@@ -127,7 +141,7 @@ function renderPreview(){
  const paper=$( "paper");paper.style.fontFamily=$( "font").value;paper.style.color=l.appearance.text||"#151A2D";
  const patient=$( "patientBlock"),flow=$( "reportFlow"),pos=p.position||{x:0,y:0};
  patient.style.transform="translate("+(Number(pos.x)||0)+"px, "+(Number(pos.y)||0)+"px)";
- if(flow)flow.style.transform="translate(0px, "+(Number(pos.y)||0)+"px)";
+ syncReportFlowPosition(l);
  patient.style.width=(Number($( "patientWidth").value)||100)+"%";
  patient.style.minHeight=(Number($( "patientHeight").value)||0)+"px";
  patient.style.fontSize=$( "patientFont").value+"px";
@@ -200,4 +214,4 @@ async function init(){
   await loadTemplate();renderPreview();enablePatientDrag();show("Report design ready");
  }catch(e){show("Could not load report design: "+e.message,true);}
 }
-window.addEventListener("resize",()=>applyPageGeometry(merge(settings.report_layout||{})));\ninit();
+window.addEventListener("resize",()=>{const l=merge(settings.report_layout||{});applyPageGeometry(l);syncReportFlowPosition(l);});\ninit();
