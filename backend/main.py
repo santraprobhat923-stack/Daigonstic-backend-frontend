@@ -312,7 +312,9 @@ def verify(rid:int,data:str=Form(...),c=Depends(current),db:Session=Depends(get_
                 test["abnormal"]=test["abnormal_status"] in {"LOW","HIGH","ABNORMAL"}
     except Exception:
         pass
-    data=json.dumps(d,ensure_ascii=False)\n    out=STORAGE_DIR/f"centre_{c.id}"/"reports"/f"report_{r.id}.pdf"; make_pdf(c,r,d,out)
+    data=json.dumps(d,ensure_ascii=False)
+    out=STORAGE_DIR/f"centre_{c.id}"/"reports"/f"report_{r.id}.pdf"
+    make_pdf(c,r,d,out)
     c.credits-=1
     db.add(CreditTransaction(centre_id=c.id,type="REPORT_USAGE",credits=-1,amount_inr=0,reference=f"report_{r.id}"))
     r.verified_data=data; p=d.get("patient",{}); r.patient_name=p.get("name",""); r.patient_age=p.get("age",""); r.patient_sex=p.get("sex",""); r.patient_phone=p.get("phone",""); r.patient_code=p.get("code",""); r.pdf_path=str(out); r.status="GENERATED"; r.payment="PENDING" if c.whatsapp_enabled else "NOT_REQUIRED"
