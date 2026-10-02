@@ -1,4 +1,4 @@
-import hashlib,json,re,secrets
+import base64,hashlib,json,re,secrets,shutil,subprocess
 from difflib import SequenceMatcher
 from pathlib import Path
 from PIL import Image
