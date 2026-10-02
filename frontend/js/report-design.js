@@ -249,4 +249,5 @@ async function init(){
   loadTemplate().catch(()=>{});
  }catch(e){show("Could not load report design: "+e.message,true);}
 }
-window.addEventListener("resize",()=>{const l=merge(settings.report_layout||{});applyPageGeometry(l);syncReportFlowPosition(l);});\ninit();
+window.addEventListener("resize",()=>{const l=merge(settings.report_layout||{});applyPageGeometry(l);syncReportFlowPosition(l);});
+init();
