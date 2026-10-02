@@ -523,6 +523,12 @@ def _result_table(title, rows, layout, styles, available_width):
     columns, widths = _result_columns(layout, available_width)
     text_style = styles["table_cell"]
     value_style = styles["table_value"]
+    abnormal_value_style = ParagraphStyle(
+        "table_abnormal_value",
+        parent=value_style,
+        fontName=_styled_font(layout, "bold"),
+        textColor=colors.HexColor("#111827"),
+    )
     header_style = styles["table_header"]
 
     header = [Paragraph(RESULT_LABELS[k], header_style) for k in columns]
@@ -531,7 +537,7 @@ def _result_table(title, rows, layout, styles, available_width):
     for row in rows:
         data.append([
             Paragraph(
-                _safe_text(row.get(key, "")),                value_style if key == "value" else text_style,
+                _safe_text(row.get(key, "")),                abnormal_value_style if key == "value" and row.get("abnormal") else (value_style if key == "value" else text_style),
             )
             for key in columns
         ])
