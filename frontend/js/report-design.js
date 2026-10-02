@@ -113,15 +113,14 @@ function applyPageGeometry(layout){
 }
 function syncReportFlowPosition(layout){
  const p=layout.patient||{};
- const patient=$( "patientBlock"),flow=$( "reportFlow");
- if(!patient||!flow)return;
+ const flow=$( "reportFlow");
+ if(!flow)return;
+ // The report block shares the patient's manual Y translation only.
+ // Do not derive its position from patient height, margins, top spacing,
+ // or any other automatic reflow calculation. This keeps the configured
+ // relative placement stable while the patient block is dragged.
  const y=Number(p.position?.y)||0;
- const gap=7;
- const topSpacing=Math.max(0,Number(layout.page?.top_spacing ?? layout.patient?.top_spacing ?? layout.results?.top_spacing ?? 0)||0);
- // The patient keeps its normal layout height while its visual position is
- // translated. Start the report after that real height, plus the saved Y
- // offset and the same gap used by the PDF renderer.
- flow.style.transform="translate(0px, "+(y+patient.offsetHeight+gap+topSpacing)+"px)";
+ flow.style.transform="translate(0px, "+y+"px)";
 }
 
 function renderPreview(){
@@ -147,8 +146,14 @@ function renderPreview(){
  syncReportFlowPosition(l);
  patient.style.width=(Number($( "patientWidth").value)||100)+"%";
  patient.style.minHeight=(Number($( "patientHeight").value)||0)+"px";
- patient.style.fontSize=$( "patientFont").value+"px";
+ const patientFontSize=Math.max(1,Number($( "patientFont").value)||8.5);
+ patient.style.fontSize=patientFontSize+"px";
  patient.style.lineHeight=$( "patientLineSpacing").value;
+ patient.querySelectorAll(".pv").forEach(row=>{
+  row.style.fontSize=patientFontSize+"px";
+  row.querySelector("b")?.style.setProperty("font-size",patientFontSize+"px");
+  row.querySelector("span")?.style.setProperty("font-size",patientFontSize+"px");
+ });
  patient.style.background=$( "patientTransparent").value==="true"?"transparent":hexToRgba($( "patientBg").value,$( "patientBgOpacity").value);
  patient.style.borderColor=p.style==="plain"?"transparent":"#E2E5EC";
  const pt=$( "pvPatientTitle");pt.textContent=p.title||"PATIENT INFORMATION";pt.style.textAlign=$( "patientTitleAlign").value;
@@ -165,7 +170,14 @@ function renderPreview(){
  sec.style.background=$( "sectionBg").value;
  sec.style.fontWeight=["bold","bold_italic"].includes($( "sectionStyle").value)?"700":"400";
  sec.style.fontStyle=["italic","bold_italic"].includes($( "sectionStyle").value)?"italic":"normal";
- document.querySelectorAll(".tr").forEach(x=>{x.style.fontSize=$("fontSize").value+"px";x.style.paddingTop=$( "rowSpacing").value+"px";x.style.paddingBottom=$( "rowSpacing").value+"px";x.style.border=$( "gridStyle").checked?"1px solid #dfe3ec":"";});
+ const resultFontSize=Math.max(1,Number($( "fontSize").value)||9);
+ document.querySelectorAll(".tr").forEach(x=>{
+  x.style.fontSize=resultFontSize+"px";
+  x.style.paddingTop=$( "rowSpacing").value+"px";
+  x.style.paddingBottom=$( "rowSpacing").value+"px";
+  x.style.border=$( "gridStyle").checked?"1px solid #dfe3ec":"";
+  x.querySelectorAll("span").forEach(cell=>cell.style.fontSize=resultFontSize+"px");
+ });
 }
 
 function collect(){
@@ -187,7 +199,10 @@ function enablePatientDrag(){
  const paper=$( "paper"),patient=$( "patientBlock");if(!paper||!patient||patient.dataset.dragReady==="1")return;
  patient.dataset.dragReady="1";patient.style.pointerEvents="auto";patient.style.touchAction="none";patient.style.cursor="grab";
  let dragging=false,pointerId=null,startX=0,startY=0,originX=0,originY=0;
- const apply=(x,y)=>{patient.style.transform="translate("+x+"px, "+y+"px)";$( "reportFlow").style.transform="translate(0px, "+y+"px)";};
+ const apply=(x,y)=>{
+  patient.style.transform="translate("+x+"px, "+y+"px)";
+  $("reportFlow").style.transform="translate(0px, "+y+"px)";
+};
  patient.addEventListener("pointerdown",e=>{if(e.button!==undefined&&e.button!==0)return;e.preventDefault();const pos=merge(settings.report_layout||{}).patient.position||{x:0,y:0};const rect=$("overlay").getBoundingClientRect();const scale=rect.width/Math.max(1,$("overlay").offsetWidth);patient.dataset.scale=String(scale||1);dragging=true;pointerId=e.pointerId;startX=e.clientX;startY=e.clientY;originX=Number(pos.x)||0;originY=Number(pos.y)||0;patient.style.cursor="grabbing";patient.setPointerCapture?.(e.pointerId);});
  patient.addEventListener("pointermove",e=>{if(!dragging||e.pointerId!==pointerId)return;e.preventDefault();const scale=Number(patient.dataset.scale)||1;apply(originX+(e.clientX-startX)/scale,originY+(e.clientY-startY)/scale);});
  const finish=e=>{if(!dragging||e.pointerId!==pointerId)return;const layout=merge(settings.report_layout||{});const scale=Number(patient.dataset.scale)||1;const x=originX+(e.clientX-startX)/scale,y=originY+(e.clientY-startY)/scale;layout.patient.position={x:Math.round(x*10)/10,y:Math.round(y*10)/10};settings.report_layout=layout;apply(layout.patient.position.x,layout.patient.position.y);dragging=false;pointerId=null;patient.style.cursor="grab";try{patient.releasePointerCapture?.(e.pointerId)}catch(_){}};
