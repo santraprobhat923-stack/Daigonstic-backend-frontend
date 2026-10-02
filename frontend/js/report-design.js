@@ -92,14 +92,24 @@ function pagePoints(size){
 function applyPageGeometry(layout){
  const paper=$("paper"),overlay=$("overlay");if(!paper||!overlay)return;
  const [pw,ph]=pagePoints(layout.page?.size);
- paper.style.aspectRatio=pw+" / "+ph;
  const page=layout.page||{};
  const left=Math.max(0,Number(page.left)||0),right=Math.max(0,Number(page.right)||0);
  const top=Math.max(0,Number(page.top)||0),bottom=Math.max(0,Number(page.bottom)||0);
+ const cssPerPt=96/72;
+ const designW=(pw-left-right)*cssPerPt;
+ const designH=(ph-top-bottom)*cssPerPt;
+ const paperW=pw*cssPerPt;
+ const paperH=ph*cssPerPt;
+ paper.style.aspectRatio=pw+" / "+ph;
  overlay.style.left=(left/pw*100)+"%";
- overlay.style.right=(right/pw*100)+"%";
+ overlay.style.right="auto";
  overlay.style.top=(top/ph*100)+"%";
- overlay.style.bottom=(bottom/ph*100)+"%";
+ overlay.style.bottom="auto";
+ overlay.style.width=designW+"px";
+ overlay.style.height=designH+"px";
+ const bodyScale=(paper.clientWidth||1)/(paperW||1);
+ overlay.style.transform="scale("+bodyScale+")";
+ overlay.dataset.scale=String(bodyScale);
 }
 function renderPreview(){
  const l=merge(settings.report_layout||{}),p=l.patient,r=l.results;
@@ -138,7 +148,7 @@ function renderPreview(){
  sec.style.background=$( "sectionBg").value;
  sec.style.fontWeight=["bold","bold_italic"].includes($( "sectionStyle").value)?"700":"400";
  sec.style.fontStyle=["italic","bold_italic"].includes($( "sectionStyle").value)?"italic":"normal";
- document.querySelectorAll(".tr").forEach(x=>{x.style.paddingTop=$( "rowSpacing").value+"px";x.style.paddingBottom=$( "rowSpacing").value+"px";x.style.border=$( "gridStyle").checked?"1px solid #dfe3ec":"";});
+ document.querySelectorAll(".tr").forEach(x=>{x.style.fontSize=$("fontSize").value+"px";x.style.paddingTop=$( "rowSpacing").value+"px";x.style.paddingBottom=$( "rowSpacing").value+"px";x.style.border=$( "gridStyle").checked?"1px solid #dfe3ec":"";});
 }
 
 function collect(){
@@ -161,9 +171,9 @@ function enablePatientDrag(){
  patient.dataset.dragReady="1";patient.style.pointerEvents="auto";patient.style.touchAction="none";patient.style.cursor="grab";
  let dragging=false,pointerId=null,startX=0,startY=0,originX=0,originY=0;
  const apply=(x,y)=>{patient.style.transform="translate("+x+"px, "+y+"px)";$( "reportFlow").style.transform="translate(0px, "+y+"px)";};
- patient.addEventListener("pointerdown",e=>{if(e.button!==undefined&&e.button!==0)return;e.preventDefault();const pos=merge(settings.report_layout||{}).patient.position||{x:0,y:0};const rect=paper.getBoundingClientRect();patient.dataset.sx=String(rect.width/paper.offsetWidth||1);patient.dataset.sy=String(rect.height/paper.offsetHeight||1);dragging=true;pointerId=e.pointerId;startX=e.clientX;startY=e.clientY;originX=Number(pos.x)||0;originY=Number(pos.y)||0;patient.style.cursor="grabbing";patient.setPointerCapture?.(e.pointerId);});
- patient.addEventListener("pointermove",e=>{if(!dragging||e.pointerId!==pointerId)return;e.preventDefault();const sx=Number(patient.dataset.sx)||1,sy=Number(patient.dataset.sy)||1;apply(originX+(e.clientX-startX)/sx,originY+(e.clientY-startY)/sy);});
- const finish=e=>{if(!dragging||e.pointerId!==pointerId)return;const layout=merge(settings.report_layout||{});const x=originX+(e.clientX-startX)/(Number(patient.dataset.sx)||1),y=originY+(e.clientY-startY)/(Number(patient.dataset.sy)||1);layout.patient.position={x:Math.round(x*10)/10,y:Math.round(y*10)/10};settings.report_layout=layout;apply(layout.patient.position.x,layout.patient.position.y);dragging=false;pointerId=null;patient.style.cursor="grab";try{patient.releasePointerCapture?.(e.pointerId)}catch(_){}};
+ patient.addEventListener("pointerdown",e=>{if(e.button!==undefined&&e.button!==0)return;e.preventDefault();const pos=merge(settings.report_layout||{}).patient.position||{x:0,y:0};const rect=$("overlay").getBoundingClientRect();const scale=rect.width/Math.max(1,$("overlay").offsetWidth);patient.dataset.scale=String(scale||1);dragging=true;pointerId=e.pointerId;startX=e.clientX;startY=e.clientY;originX=Number(pos.x)||0;originY=Number(pos.y)||0;patient.style.cursor="grabbing";patient.setPointerCapture?.(e.pointerId);});
+ patient.addEventListener("pointermove",e=>{if(!dragging||e.pointerId!==pointerId)return;e.preventDefault();const scale=Number(patient.dataset.scale)||1;apply(originX+(e.clientX-startX)/scale,originY+(e.clientY-startY)/scale);});
+ const finish=e=>{if(!dragging||e.pointerId!==pointerId)return;const layout=merge(settings.report_layout||{});const scale=Number(patient.dataset.scale)||1;const x=originX+(e.clientX-startX)/scale,y=originY+(e.clientY-startY)/scale;layout.patient.position={x:Math.round(x*10)/10,y:Math.round(y*10)/10};settings.report_layout=layout;apply(layout.patient.position.x,layout.patient.position.y);dragging=false;pointerId=null;patient.style.cursor="grab";try{patient.releasePointerCapture?.(e.pointerId)}catch(_){}};
  patient.addEventListener("pointerup",finish);patient.addEventListener("pointercancel",finish);
 }
 
@@ -190,4 +200,4 @@ async function init(){
   await loadTemplate();renderPreview();enablePatientDrag();show("Report design ready");
  }catch(e){show("Could not load report design: "+e.message,true);}
 }
-init();
+window.addEventListener("resize",()=>applyPageGeometry(merge(settings.report_layout||{})));\ninit();
