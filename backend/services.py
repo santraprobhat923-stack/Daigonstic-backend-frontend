@@ -561,20 +561,20 @@ def _render_pdfme(centre, data, out, pdfme_template):
 
 
 def make_pdf(centre,report,data,out):
+    """Generate the report through Aarogyam's custom ReportLab renderer.
+
+    The current product uses the lightweight custom Report Design editor.
+    Saved layout coordinates are rendered by report_renderer.py; no PDFMe or
+    Node.js runtime is involved in report approval.
+    """
     try:
         layout=json.loads(centre.report_layout or "{}")
     except Exception:
         layout={}
 
-    pdfme_template=layout.get("pdfme_template")
-    if isinstance(pdfme_template,dict) and isinstance(pdfme_template.get("schemas"),list):
-        # A saved Master Template is authoritative. Never pass it through the
-        # legacy ReportLab flow/reflow engine because that changes coordinates.
-        _render_pdfme(centre,data,out,pdfme_template)
-        return
-
-    # Legacy Report Design remains available for centres that have not saved a
-    # PDFMe Master Template yet.
+    # The custom renderer is the single authoritative report-generation path.
+    # Never route approval through legacy PDFMe data, even if an old layout
+    # record still contains a stale pdfme_template key.
     make_pdf_body_on_template(centre.template_path, data, out, layout)
 
 def report_dict(r):
