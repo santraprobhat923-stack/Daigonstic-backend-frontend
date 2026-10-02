@@ -47,59 +47,6 @@ migrate_legacy_sqlite()
 app=FastAPI(title="Aarogyam")
 app.mount("/static",StaticFiles(directory="frontend"),name="static")
 app.mount("/superadmin-static",StaticFiles(directory="frontend"),name="superadmin-static")
-@app.get("/pdfme/{asset_path:path}")
-@app.get("/@pdfme/{asset_path:path}")
-@app.get("/node/{asset_path:path}")
-def pdfme_asset(asset_path:str,request:Request):
-    print("PDFME REQUEST:", asset_path, request.url.query, flush=True)
-    """Serve pdfme's browser module graph through the Aarogyam origin.
-
-    esm.sh emits root-relative imports such as /@pdfme/common and /node/*.mjs.
-    Those must remain same-origin because pdfme also creates a PDF worker. We
-    deliberately proxy only the pdfme/node namespaces here; normal app routes
-    are untouched.
-    """
-    import requests as _requests
-    from urllib.parse import unquote
-
-    asset_path=unquote(asset_path).lstrip("/")
-    query=("?"+request.url.query) if request.url.query else ""
-
-    # esm.sh's node/* endpoints are not consistently available. Use the browser
-    # ESM builds from jsDelivr for the two Node globals pdfme's dependency graph
-    # requests in the browser.
-    if asset_path == "node/buffer.mjs":
-        url="https://cdn.jsdelivr.net/npm/buffer@6.0.3/+esm"
-    elif asset_path == "node/process.mjs":
-        url="https://cdn.jsdelivr.net/npm/process@0.11.10/+esm"
-    else:
-        url="https://esm.sh/"+asset_path+query
-
-    try:
-        response=_requests.get(url,timeout=30,headers={"User-Agent":"Aarogyam-pdfme-proxy/1.0"})
-        response.raise_for_status()
-    except Exception as e:
-        raise HTTPException(502,f"Could not load pdfme asset: {e}")
-
-    body=response.content
-    ctype=response.headers.get("content-type","").lower()
-    if "javascript" in ctype or asset_path.endswith((".js",".mjs")):
-        # Rewrite only root-relative pdfme/node imports to the local proxy.
-        # Keep this as explicit byte replacements; a regex replacement here is
-        # unnecessarily fragile and can crash Python's re template parser.
-        body=body.replace(b'"/@pdfme/',b'"/pdfme/@pdfme/')
-        body=body.replace(b"'/@pdfme/",b"'/pdfme/@pdfme/")
-        body=body.replace(b'"/node/',b'"/pdfme/node/')
-        body=body.replace(b"'/node/",b"'/pdfme/node/")
-        # Also rewrite absolute esm.sh module URLs that appear in generated
-        # wrappers/bundles.
-        body=body.replace(b"https://esm.sh/",b"/pdfme/")
-        body=body.replace(b'from "/pdfme//',b'from "/pdfme/')
-        body=body.replace(b'import "/pdfme//',b'import "/pdfme/')
-        body=body.replace(b'export * from "/pdfme//',b'export * from "/pdfme/')
-
-    media=response.headers.get("content-type","application/javascript").split(";")[0]
-    return Response(content=body,media_type=media,headers={"Cache-Control":"public, max-age=3600"})
 app.include_router(superadmin_router)
 @app.on_event("startup")
 def startup():
@@ -122,18 +69,6 @@ def report_design():
     index_path=Path("frontend/report-design.html")
     if not index_path.is_file():
         raise HTTPException(500,"Report design frontend not found")
-    return HTMLResponse(index_path.read_text(encoding="utf-8"))
-@app.get("/template-designer")
-def template_designer():
-    index_path=Path("frontend/pdfme-designer.html")
-    if not index_path.is_file():
-        raise HTTPException(500,"Template designer frontend not found")
-    return HTMLResponse(index_path.read_text(encoding="utf-8"))
-@app.get("/report-design")
-def report_design():
-    index_path = Path("frontend/report-design.html")
-    if not index_path.is_file():
-        raise HTTPException(500, "Report design frontend not found")
     return HTMLResponse(index_path.read_text(encoding="utf-8"))
 
 
@@ -526,56 +461,3 @@ def patient(token:str,db:Session=Depends(get_db)):
     if not r or not Path(r.pdf_path).exists(): raise HTTPException(404,"Report not released")
     c=db.get(Centre,r.centre_id); notify(db,c.id,r.id,"REPORT_DOWNLOADED",f"Patient downloaded report #{r.id}."); db.commit()
     return FileResponse(r.pdf_path,media_type="application/pdf",filename=f"Aarogyam_Report_{r.id}.pdf")
-@app.get("/{dependency_path:path}")
-def pdfme_dependency(dependency_path:str,request:Request):
-    """Proxy root-relative esm.sh dependencies emitted by pdfme bundles.
-
-    pdfme's browser bundles can import packages such as acorn, zod, pako,
-    base64-js, ieee754 and @pdf-lib/* from the site root. The main pdfme
-    proxy cannot see those paths, so handle only package-looking paths here.
-    This route is intentionally placed after the normal application routes.
-    """
-    from urllib.parse import unquote
-    import requests as _requests
-
-    path=unquote(dependency_path).lstrip("/")
-    known_prefixes=(
-        "acorn@", "zod@", "color@", "color-convert@", "color-string@", "color-name@", "html-entities@", "pako@", "node-html-better-parser@",
-        "base64-js@", "ieee754@", "npm/", "@pdf-lib/",
-    )
-    if not path.startswith(known_prefixes):
-        raise HTTPException(404,"Not found")
-
-    query=("?"+request.url.query) if request.url.query else ""
-    if path == "npm/base64-js@1.5.1/+esm":
-        url="https://cdn.jsdelivr.net/npm/base64-js@1.5.1/+esm"
-    elif path == "npm/ieee754@1.2.1/+esm":
-        url="https://cdn.jsdelivr.net/npm/ieee754@1.2.1/+esm"
-    else:
-        url="https://esm.sh/"+path+query
-    try:
-        response=_requests.get(url,timeout=30,headers={"User-Agent":"Aarogyam-pdfme-proxy/1.0"})
-        response.raise_for_status()
-    except Exception as e:
-        raise HTTPException(502,f"Could not load pdfme dependency: {e}")
-
-    body=response.content
-    ctype=response.headers.get("content-type","").lower()
-    if "javascript" in ctype or path.endswith((".js",".mjs","+esm")):
-        for prefix in (
-            b"acorn@",b"zod@",b"color@",b"color-convert@",b"color-string@",b"color-name@",b"html-entities@",b"pako@",b"node-html-better-parser@",
-            b"base64-js@",b"ieee754@",b"npm/",b"@pdf-lib/",
-        ):
-            body=body.replace(b'"/'+prefix,b'"/pdfme/'+prefix)
-            body=body.replace(b"'/"+prefix,b"'/pdfme/"+prefix)
-        body=body.replace(b'"/@pdfme/',b'"/pdfme/@pdfme/')
-        body=body.replace(b"'/@pdfme/",b"'/pdfme/@pdfme/")
-        body=body.replace(b'"/node/',b'"/pdfme/node/')
-        body=body.replace(b"'/node/",b"'/pdfme/node/")
-        body=body.replace(b"https://esm.sh/",b"/pdfme/")
-        body=body.replace(b'from "/pdfme//',b'from "/pdfme/')
-        body=body.replace(b'import "/pdfme//',b'import "/pdfme/')
-        body=body.replace(b'export * from "/pdfme//',b'export * from "/pdfme/')
-
-    media=response.headers.get("content-type","application/javascript").split(";")[0]
-    return Response(content=body,media_type=media,headers={"Cache-Control":"public, max-age=3600"})
