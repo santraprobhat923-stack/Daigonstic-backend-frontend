@@ -211,16 +211,8 @@ def _metrics(layout):
     top_offset = max(0, float(page.get("top", 132) or 0))
     bottom = max(0, float(page.get("bottom", 82) or 0))
 
-    # Never create a negative/invalid frame if a saved layout is malformed.
-    if left + right >= page_w:
-        scale = max(0, (page_w - 1) / max(1, left + right))
-        left *= scale
-        right *= scale
-    if top_offset + bottom >= page_h:
-        scale = max(0, (page_h - 1) / max(1, top_offset + bottom))
-        top_offset *= scale
-        bottom *= scale
-
+    # Saved designer geometry is authoritative. Do not scale, clamp, or
+    # otherwise repair the user's coordinates here.
     return left, right, page_h - top_offset, bottom
 
 
@@ -336,20 +328,11 @@ class _PatientPositioned(Flowable):
     def wrap(self, availWidth, availHeight):
         w, h = self.content.wrap(availWidth, availHeight)
 
-        # Position is relative to the preview's overlay/frame origin.
-        # Clamp it to the frame so the patient card cannot be dragged or
-        # saved outside the configured report body region.
-        max_x = max(0, availWidth - w)
-        max_y = max(0, availHeight - h)
-        self.x = min(max(0, self.x), max_x)
-        self.y = min(max(0, self.y), max_y)
-
+        # Designer coordinates are absolute. Never clamp them to the frame
+        # and never convert an explicit offset into additional flow height.
         self._w = w
         self._h = h
-
-        # Positive Y moves downward from the frame's top edge. Reserve that
-        # shifted distance so the following report flow starts below it.
-        return w, h + self.y
+        return w, h
 
     def draw(self):
         self.canv.saveState()
@@ -375,7 +358,7 @@ def _patient_block(patient, layout, styles, available_width):
 
     cols = 1 if int(cfg.get("columns", 2)) == 1 else 2
     cols = min(cols, len(items))
-    width_percent = max(40.0, min(100.0, float(cfg.get("width_percent", 100) or 100)))
+    width_percent = float(cfg.get("width_percent", 100) or 100)
     block_width = available_width * width_percent / 100.0
     gap = 7 * mm if cols == 2 else 0
     col_width = (block_width - gap * (cols - 1)) / cols
@@ -437,7 +420,7 @@ def _patient_block(patient, layout, styles, available_width):
         ]
 
     title = str(cfg.get("title") or "PATIENT INFORMATION")
-    min_height = max(0, float(cfg.get("height", 0) or 0) * 0.75)
+    min_height = float(cfg.get("height", 0) or 0) * 0.75
     outer = Table(
         [[Paragraph(_safe_text(title), styles["patient_title"])],
          [patient_table]],
@@ -465,12 +448,12 @@ def _patient_block(patient, layout, styles, available_width):
     # TableStyle commands additively, so an empty replacement would erase the
     # exact background, border, padding and alignment rules above.
 
-    top_spacing = max(0, float(cfg.get("top_spacing", 0) or 0))
+    top_spacing = float(cfg.get("top_spacing", 0) or 0)
     position = cfg.get("position") or {}
-    x_offset = float(position.get("x", 0) or 0) * 0.75
-    y_offset = float(position.get("y", 0) or 0) * 0.75
+    # The only coordinate conversion is CSS px -> PDF points (96 -> 72).
+    x_offset = float(position.get("x", 0) or 0) * 72.0 / 96.0
+    y_offset = float(position.get("y", 0) or 0) * 72.0 / 96.0
 
-    min_height = max(0, float(cfg.get("height", 0) or 0) * 0.75)
     positioned = _PatientPositioned(outer, x_offset, y_offset)
     return [Spacer(1, top_spacing), positioned, Spacer(1, 2)]
 
