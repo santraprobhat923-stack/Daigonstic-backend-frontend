@@ -74,8 +74,8 @@ def normalize(data):
     return {"patient":{"name":_clean(p.get("name")),"age":_clean(p.get("age")),"sex":_clean(p.get("gender")),"phone":_clean(p.get("phone")),"code":_clean(p.get("patient_id")),"uhid":_clean(p.get("uhid")),"referred_by":_clean(p.get("referring_doctor")),"received_on":_clean(p.get("received_on")),"reported_on":_clean(p.get("reported_on"))},"tests":tests,"report":{"department":_clean(h.get("department")),"title":_clean(h.get("title")),"test_type":_clean(h.get("test_type"))},"extraction_engine":"cloudflare_workers_ai","ai_schema_version":"1.0"}
 def extract_with_cloudflare(paths):
     if not CLOUDFLARE_ACCOUNT_ID or not CLOUDFLARE_API_TOKEN: raise RuntimeError("Cloudflare AI is not configured. Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN.")
-    body={"messages":[{"role":"system","content":SYSTEM},{"role":"user","content":[{"type":"text","text":"Extract this entire laboratory document into the requested JSON. Combine all supplied pages. Do not invent missing data."}]+_parts(paths)}],"temperature":0,"max_tokens":6000}
-    r=requests.post(URL.format(CLOUDFLARE_ACCOUNT_ID,CLOUDFLARE_AI_MODEL),headers={"Authorization":"Bearer "+CLOUDFLARE_API_TOKEN,"Content-Type":"application/json"},json=body,timeout=CLOUDFLARE_AI_TIMEOUT)
+    body={"messages":[{"role":"system","content":SYSTEM},{"role":"user","content":[{"type":"text","text":"Extract this entire laboratory document into the requested JSON. Combine all supplied pages. Do not invent missing data."}]+_parts(paths)}],"temperature":0,"max_tokens":6000,"chat_template_kwargs":{"enable_thinking":False}
+    r=requests.post(URL.format(CLOUDFLARE_ACCOUNT_ID,CLOUDFLARE_AI_MODEL),headers={"Authorization":"Bearer "+CLOUDFLARE_API_TOKEN,"Content-Type":"application/json","User-Agent":"Aarogyam/1.0"},json=body,timeout=CLOUDFLARE_AI_TIMEOUT)
     if r.status_code>=400: raise RuntimeError("Cloudflare AI request failed ("+str(r.status_code)+"): "+r.text[:600])
     payload=r.json()
     if not payload.get("success",True): raise RuntimeError("Cloudflare AI request failed: "+str(payload.get("errors")))
