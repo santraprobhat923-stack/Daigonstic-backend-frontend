@@ -591,3 +591,70 @@ The code is synchronized and syntactically valid, but the complete production te
 
 ### Development rule for report design
 Keep the Standard Report Designer simple and touch-friendly. Do not reintroduce arbitrary x/y controls for every field or make PDFMe the normal centre workflow. The standard experience should remain: upload letterhead → configure patient/result appearance → position the patient block if needed → save → Aarogyam renderer generates the dynamic report body.
+
+
+## Cloudflare Workers AI laboratory extraction — 2 Oct 2026
+
+Aarogyam now has a Cloudflare Workers AI multimodal extraction adapter at `backend/cloudflare_ai.py`. Cloudflare AI is the primary semantic document-understanding engine when `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` are configured. The default model is `@cf/google/gemma-4-26b-a4b-it`, selected because Cloudflare documents vision, document/PDF parsing, multilingual OCR and handwriting recognition for this model. The integration is server-side; Cloudflare credentials are never exposed to the browser.
+
+### Universal laboratory-document intake
+
+The New Report intake now accepts:
+- Camera/gallery images of digital analyzer slips.
+- Scanned/photographed laboratory reports.
+- Handwritten laboratory/doctor notes supplied as images.
+- PDF legacy reports; PDF pages are rendered to image pages before being sent to the multimodal vision model.
+
+The current ingestion contract is intentionally focused on clinical images/PDFs. Unsupported binary office formats are rejected rather than silently extracting incomplete text. A future document-conversion layer can be added without changing the report workflow.
+
+### AI extraction contract
+
+Cloudflare AI is instructed to return a strict Aarogyam extraction contract containing:
+- `patient_credentials`: name, age, gender, patient ID, UHID, referring doctor, received date, reported date and phone.
+- `report`: department, title and test type.
+- `test_results[]`: test name, result value, unit, reference range and section.
+
+The adapter maps this into Aarogyam's existing internal keys (`patient`, `tests`, `report`) so existing technician verification, tenant isolation, PDF rendering and WhatsApp/payment workflow remain compatible.
+
+### Abnormal-result detection
+
+Abnormality is calculated server-side from the extracted result and the reference range rather than trusting the model's clinical judgement. Numeric ranges, explicit thresholds such as <5/>10, and common qualitative pairs such as Positive/Negative are supported. Each result receives `abnormal_status` and `abnormal` metadata.
+
+Technician verification is still authoritative. Immediately before PDF generation, Aarogyam recomputes the abnormal flag from the technician-approved value/reference pair. Abnormal values are displayed in bold/dark text in the verification UI and rendered in bold/dark text in the final PDF.
+
+If no reference range is visible, the result remains `UNKNOWN` rather than inventing a range.
+
+### Extraction fallback and safety
+
+If Cloudflare is configured, it is attempted first. If the remote request fails, Aarogyam falls back to the existing multi-pass Tesseract parser so a temporary AI outage does not destroy an intake job. The report remains in the existing `OCR_REVIEW` technician queue either way; no AI-extracted value is automatically committed to a final PDF.
+
+New server settings in `.env.example`:
+
+```
+CLOUDFLARE_ACCOUNT_ID=
+CLOUDFLARE_API_TOKEN=
+CLOUDFLARE_AI_MODEL=@cf/google/gemma-4-26b-a4b-it
+CLOUDFLARE_AI_TIMEOUT=120
+```
+
+Cloudflare Workers AI currently provides a REST API requiring an Account ID and API token, and Cloudflare documents structured JSON/JSON Schema support in Workers AI generally. Vision models have model-specific input/output capabilities, so the Aarogyam adapter validates and normalizes the multimodal response before it enters the application workflow.
+
+### Current workflow
+
+**Upload/capture image or PDF → Cloudflare AI semantic extraction → server-side normalization + abnormality marking → Pending Verification → technician reviews original source and edits data → Approve & generate PDF → centre download → optional payment/WhatsApp delivery.**
+
+The technician remains the mandatory gate before report generation.
+
+### Cloudflare setup checkpoint
+
+Before enabling the AI path on EC2, create a Workers AI API token in the Cloudflare dashboard and obtain the Account ID. Cloudflare's current REST documentation says the token needs Workers AI Read and Workers AI Edit permissions. Add the values to the server's private `.env`; do not commit the token to GitHub.
+
+After configuration:
+
+```bash
+cd ~/Daigonstic-backend-frontend
+git pull
+sudo systemctl restart aarogyam
+```
+
+Then upload one real slip and confirm the Pending Verification item contains AI-extracted patient credentials and test rows before testing larger batches.
