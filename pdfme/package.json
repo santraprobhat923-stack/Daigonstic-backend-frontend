@@ -1,0 +1,10 @@
+{
+  "name": "aarogyam-pdfme-runtime",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@pdfme/common": "6.1.12",
+    "@pdfme/generator": "6.1.12",
+    "@pdfme/schemas": "6.1.12"
+  }
+}
