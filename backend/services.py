@@ -414,7 +414,29 @@ def _extract_report_meta(readings):
             if m and not report.get("title"): report["title"]=_clean_line(m.group(1))
     return report
 
-def extract(path):\n    # Cloudflare Workers AI is the primary semantic extraction engine.\n    # Tesseract remains a resilience fallback when Cloudflare is not configured\n    # or remote inference fails. Both paths produce the same internal schema.\n    if CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN:\n        try:\n            from .cloudflare_ai import extract_with_cloudflare\n            data=extract_with_cloudflare([path])\n            return json.dumps(data,ensure_ascii=False),data\n        except Exception as ai_error:\n            fallback_error=f"Cloudflare AI extraction failed: {ai_error}"\n    else:\n        fallback_error="Cloudflare AI is not configured; using local OCR fallback."\n    readings=_ocr_variants(path)\n    combined="\n".join(readings)\n    patient={**_patient_fields(readings)}\n    if re.search(r"\b(?:age|sex|gender|mobile|phone|patient\s*(?:id|code)|uhid|referred|received|reported)\b",patient["name"],re.I):\n        patient["name"]=""\n    data={"patient":patient,"tests":_parse_tests(readings),"report":_extract_report_meta(readings)}\n    data["extraction_engine"]="tesseract_fallback"\n    data["extraction_warning"]=fallback_error\n    return combined+"\n"+fallback_error,data\ndef sha(data): return hashlib.sha256(data).hexdigest()
+def extract(path):
+    # Cloudflare Workers AI is the primary semantic extraction engine.
+    # Tesseract remains a resilience fallback when Cloudflare is not configured
+    # or remote inference fails. Both paths produce the same internal schema.
+    if CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN:
+        try:
+            from .cloudflare_ai import extract_with_cloudflare
+            data=extract_with_cloudflare([path])
+            return json.dumps(data,ensure_ascii=False),data
+        except Exception as ai_error:
+            fallback_error=f"Cloudflare AI extraction failed: {ai_error}"
+    else:
+        fallback_error="Cloudflare AI is not configured; using local OCR fallback."
+    readings=_ocr_variants(path)
+    combined="\n".join(readings)
+    patient={**_patient_fields(readings)}
+    if re.search(r"\b(?:age|sex|gender|mobile|phone|patient\s*(?:id|code)|uhid|referred|received|reported)\b",patient["name"],re.I):
+        patient["name"]=""
+    data={"patient":patient,"tests":_parse_tests(readings),"report":_extract_report_meta(readings)}
+    data["extraction_engine"]="tesseract_fallback"
+    data["extraction_warning"]=fallback_error
+    return combined+"\n"+fallback_error,data
+def sha(data): return hashlib.sha256(data).hexdigest()
 def notify(db,cid,rid,kind,msg): db.add(Notification(centre_id=cid,report_id=rid,kind=kind,message=msg))
 def queue_wa(db,centre,report,kind,payload):
     if not centre.whatsapp_enabled or not report.patient_phone: return
