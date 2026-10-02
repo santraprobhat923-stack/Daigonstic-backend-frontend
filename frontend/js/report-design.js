@@ -85,8 +85,25 @@ function syncLegacyChecks(){
  });
 }
 
+function pagePoints(size){
+ const sizes={A4:[595.2756,841.8898],A5:[419.5276,595.2756],LETTER:[612,792],LEGAL:[612,1008]};
+ return sizes[String(size||"A4").toUpperCase()]||sizes.A4;
+}
+function applyPageGeometry(layout){
+ const paper=$("paper"),overlay=$("overlay");if(!paper||!overlay)return;
+ const [pw,ph]=pagePoints(layout.page?.size);
+ paper.style.aspectRatio=pw+" / "+ph;
+ const page=layout.page||{};
+ const left=Math.max(0,Number(page.left)||0),right=Math.max(0,Number(page.right)||0);
+ const top=Math.max(0,Number(page.top)||0),bottom=Math.max(0,Number(page.bottom)||0);
+ overlay.style.left=(left/pw*100)+"%";
+ overlay.style.right=(right/pw*100)+"%";
+ overlay.style.top=(top/ph*100)+"%";
+ overlay.style.bottom=(bottom/ph*100)+"%";
+}
 function renderPreview(){
  const l=merge(settings.report_layout||{}),p=l.patient,r=l.results;
+ applyPageGeometry(l);
  const pv=$("pvPatient");pv.innerHTML="";
  fieldDefs.forEach(([check,key,label,value])=>{
   const visible=p.visible.includes(key);
@@ -96,6 +113,7 @@ function renderPreview(){
   pv.appendChild(d);
  });
  pv.style.gridTemplateColumns=$( "patientCols").value==="1"?"1fr":"1fr 1fr";
+ pv.style.rowGap=(Number($( "patientRowGap").value)||0)+"px";
  const paper=$( "paper");paper.style.fontFamily=$( "font").value;paper.style.color=l.appearance.text||"#151A2D";
  const patient=$( "patientBlock"),flow=$( "reportFlow"),pos=p.position||{x:0,y:0};
  patient.style.transform="translate("+(Number(pos.x)||0)+"px, "+(Number(pos.y)||0)+"px)";
@@ -151,7 +169,7 @@ function enablePatientDrag(){
 
 async function showAuthenticatedTemplate(){try{const r=await fetch("/api/settings/template/preview?t="+Date.now(),{headers:auth(),cache:"no-store"});if(!r.ok)throw Error("Could not load template preview");const blob=await r.blob();if(templateObjectUrl)URL.revokeObjectURL(templateObjectUrl);templateObjectUrl=URL.createObjectURL(blob);$("templateBg").src=templateObjectUrl;$("templateBg").style.display="block";$("templateName").textContent="Uploaded letterhead";return true;}catch(e){$("templateBg").removeAttribute("src");$("templateBg").style.display="none";$("templateName").textContent="Template preview unavailable";return false;}}
 async function uploadTemplate(){const f=$("templateFile").files[0];if(!f)return alert("Choose a PDF or Word letterhead first.");const fd=new FormData();fd.append("file",f);try{show("Uploading letterhead…",true);await api("/api/settings/template",{method:"POST",body:fd});await showAuthenticatedTemplate();$("templateName").textContent=f.name;show("Letterhead uploaded");}catch(e){show("Upload failed: "+e.message,true);}}
-async function saveDesign(){try{show("Saving report design…",true);const layout=collect();const f=new URLSearchParams({whatsapp_enabled:String(settings.whatsapp_enabled||false),upi_id:String(settings.upi_id||""),report_layout:JSON.stringify(layout)});await api("/api/settings",{method:"PUT",body:f});settings.report_layout=layout;show("Report design saved");}catch(e){show("Save failed: "+e.message,true);}}
+async function saveDesign(){try{show("Saving report design…",true);const layout=collect();const f=new URLSearchParams({whatsapp_enabled:String(settings.whatsapp_enabled||false),upi_id:String(settings.upi_id||""),report_layout:JSON.stringify(layout)});await api("/api/settings",{method:"PUT",body:f});settings.report_layout=layout;applyPageGeometry(layout);renderPreview();show("Report design saved");}catch(e){show("Save failed: "+e.message,true);}}
 async function loadTemplate(){try{const r=await fetch("/api/settings/template",{headers:auth(),cache:"no-store"});if(r.ok)await showAuthenticatedTemplate();}catch(e){}}
 
 async function init(){
