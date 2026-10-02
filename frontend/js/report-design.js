@@ -1,9 +1,8 @@
-const TOKEN=(()=>{try{return localStorage.getItem("aarogyam_token")||""}catch(e){return""}})();
 let settings={};
 let templateObjectUrl="";
 
 const $=id=>document.getElementById(id);
-const auth=()=>TOKEN?{Authorization:"Bearer "+TOKEN}:{};
+const auth=()=>{try{const token=localStorage.getItem("aarogyam_token")||"";return token?{Authorization:"Bearer "+token}:{}}catch(e){return{}}};
 
 const defaults={
  page:{size:"A4",left:52,right:52,top:132,bottom:82,auto_break:true,repeat_table_header:true},
@@ -217,7 +216,14 @@ async function showAuthenticatedTemplate(){
  }}
 async function uploadTemplate(){const f=$("templateFile").files[0];if(!f)return alert("Choose a PDF or Word letterhead first.");const fd=new FormData();fd.append("file",f);try{show("Uploading letterhead…",true);await api("/api/settings/template",{method:"POST",body:fd});await showAuthenticatedTemplate();$("templateName").textContent=f.name;show("Letterhead uploaded");}catch(e){show("Upload failed: "+e.message,true);}}
 async function saveDesign(){try{show("Saving report design…",true);const layout=collect();const f=new URLSearchParams({whatsapp_enabled:String(settings.whatsapp_enabled||false),upi_id:String(settings.upi_id||""),report_layout:JSON.stringify(layout)});await api("/api/settings",{method:"PUT",body:f});settings.report_layout=layout;applyPageGeometry(layout);renderPreview();show("Report design saved");}catch(e){show("Save failed: "+e.message,true);}}
-async function loadTemplate(){try{const r=await fetch("/api/settings/template",{headers:auth(),cache:"no-store"});if(r.ok)await showAuthenticatedTemplate();}catch(e){}}
+async function loadTemplate(){
+ try{
+  const r=await fetch("/api/settings/template",{headers:auth(),cache:"no-store"});
+  if(r.ok)await showAuthenticatedTemplate();
+ }catch(e){
+  $("templateName").textContent="Template preview unavailable";
+ }
+}
 
 async function init(){
  try{
@@ -236,7 +242,11 @@ async function init(){
   const ids=["patientStyle","patientCols","patientFont","patientSpacing","patientWidth","patientHeight","patientLineSpacing","patientRowGap","patientBg","patientBgOpacity","patientTransparent","patientTitleAlign","patientTitleSize","patientTitleStyle","patientTitleColor","font","fontSize","sectionSize","rowSpacing","gridStyle","sectionAlign","sectionStyle","sectionColor","sectionBg","sectionTitleText","reportTitleText","reportTitleAlign","reportTitleSize","reportTitleStyle","reportTitleColor","reportTitleLineColor","pageSize","autoBreak","repeatHeader","reportTop"];
   fieldDefs.forEach(([check,key])=>ids.push(check,"label_"+key));
   ids.forEach(id=>$(id)?.addEventListener("input",renderPreview));ids.forEach(id=>$(id)?.addEventListener("change",renderPreview));
-  await loadTemplate();renderPreview();enablePatientDrag();show("Report design ready");
+  // Render the designer first. Template rasterization is secondary and must never prevent the editor itself from appearing.
+  renderPreview();enablePatientDrag();
+  show("Report design ready");
+  // Load the letterhead independently after the editor is already visible.
+  loadTemplate().catch(()=>{});
  }catch(e){show("Could not load report design: "+e.message,true);}
 }
 window.addEventListener("resize",()=>{const l=merge(settings.report_layout||{});applyPageGeometry(l);syncReportFlowPosition(l);});\ninit();
