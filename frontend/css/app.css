@@ -55,7 +55,7 @@ button:hover{border-color:#d0d4df;background:#fafbfe}.primary{background:linear-
 .upload-icon{width:60px;height:60px;margin:0 auto 15px;border-radius:17px;background:#eeeaff;color:#6555f1;display:grid;place-items:center;font-size:27px;box-shadow:0 10px 25px rgba(109,93,252,.10)}
 .upload-zone h3{font-size:19px;margin-bottom:5px}.upload-zone input{margin:21px auto;display:block;max-width:100%}.footer-note{font-size:11px;color:#9299a9;margin-top:20px}
 
-.verify-card{max-width:1180px}.verify-banner{display:flex;justify-content:space-between;gap:16px;padding:16px 18px;background:linear-gradient(90deg,#f7f5ff,#fbfaff);border:1px solid #e5e0ff;border-radius:13px;margin:16px 0 22px}
+.source-card{min-width:0;overflow:hidden}.source-card #sourceFrame,.source-card #sourceImage{display:block;width:100%;height:min(78vh,720px);min-height:420px;max-width:100%;box-sizing:border-box;object-fit:contain;background:#f7f8fa}.verify-card{max-width:1180px}.verify-banner{display:flex;justify-content:space-between;gap:16px;padding:16px 18px;background:linear-gradient(90deg,#f7f5ff,#fbfaff);border:1px solid #e5e0ff;border-radius:13px;margin:16px 0 22px}
 .verify-card>h3{margin-top:25px;padding-top:5px;border-top:1px solid var(--line)}.test-card{border:1px solid var(--line);border-radius:13px;padding:0;margin:0 0 10px;background:#fff;overflow:hidden}
 .test-title{display:flex;align-items:center;justify-content:space-between;padding:12px 15px;background:#fafafd;border-bottom:1px solid var(--line);font-weight:750;font-size:12px}
 .remove-test{padding:5px 9px;font-size:10px;background:#fff}.test-fields{display:grid;grid-template-columns:minmax(220px,2fr) minmax(150px,1fr) minmax(150px,1fr);gap:10px;padding:4px 15px 12px}
