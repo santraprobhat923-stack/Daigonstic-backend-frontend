@@ -518,9 +518,29 @@ def _result_columns(layout, available_width):
     return columns, [usable * w / total for w in raw]
 
 
+def _result_mode(rows):
+    """Choose a renderer that matches the clinical data actually extracted."""
+    explicit = []
+    for row in rows or []:
+        value = str(row.get("result_type") or "").strip().lower()
+        if value:
+            explicit.append(value)
+    for wanted in ("narrative", "special", "quantitative", "observation", "qualitative"):
+        if wanted in explicit:
+            return wanted
+
+    # Do not force every report into a four-column pathology table.
+    # A unit/reference pair is a strong signal that the result is quantitative.
+    if any(str(r.get("unit") or "").strip() or str(r.get("reference_range") or "").strip() for r in rows or []):
+        return "quantitative"
+    return "observation"
+
+
 def _result_table(title, rows, layout, styles, available_width):
+    """Render one clinical section without assuming a pathology-only schema."""
     results = layout["results"]
-    columns, widths = _result_columns(layout, available_width)
+    mode = _result_mode(rows)
+
     text_style = styles["table_cell"]
     value_style = styles["table_value"]
     abnormal_value_style = ParagraphStyle(
@@ -531,13 +551,106 @@ def _result_table(title, rows, layout, styles, available_width):
     )
     header_style = styles["table_header"]
 
-    header = [Paragraph(RESULT_LABELS[k], header_style) for k in columns]
-    data = [header]
+    if mode == "narrative":
+        narrative_style = ParagraphStyle(
+            "narrative_result",
+            parent=text_style,
+            fontSize=float(results.get("font_size", 9)) * 0.75,
+            leading=(float(results.get("font_size", 9)) + 3) * 0.75,
+            spaceAfter=5 * 0.75,
+        )
+        content = []
+        if results.get("section_headers", True):
+            section_bg = _color(
+                results.get("section_background"),
+                colors.HexColor("#ECEAFB"),
+            )
+            section_style = ParagraphStyle(
+                "section_narrative",
+                parent=styles["section"],
+                fontName=_styled_font(
+                    layout,
+                    results.get(
+                        "section_style",
+                        "bold" if results.get("section_bold", True) else "normal",
+                    ),
+                ),
+                fontSize=float(results.get("section_font_size", 7.9)) * 0.75,
+                leading=(float(results.get("section_font_size", 7.9)) + 1) * 0.75,
+                textColor=_color(results.get("section_text"), colors.black),
+                alignment=_alignment(results.get("section_align", "left")),
+            )
+            pad = max(2, float(results.get("section_padding", 5))) * 0.75
+            content.append(
+                Table(
+                    [[Paragraph(_safe_text(str(title).upper()), section_style)]],
+                    colWidths=[available_width],
+                    hAlign="LEFT",
+                    style=TableStyle([
+                        ("BACKGROUND", (0, 0), (-1, -1), section_bg),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 8 * 0.75),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 8 * 0.75),
+                        ("TOPPADDING", (0, 0), (-1, -1), pad),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), pad),
+                    ]),
+                )
+            )
+            content.append(Spacer(1, 4 * 0.75))
+        for row in rows:
+            name = str(row.get("name") or "").strip()
+            value = str(row.get("value") or row.get("comment") or "").strip()
+            if name and value:
+                content.append(
+                    Paragraph(
+                        f"<b>{_safe_text(name)}</b><br/>{_safe_text(value)}",
+                        narrative_style,
+                    )
+                )
+            elif value:
+                content.append(Paragraph(_safe_text(value), narrative_style))
+        content.append(Spacer(1, 9))
+        return content
 
+    # Observation/qualitative/special sections are intentionally compact.
+    if mode in ("observation", "qualitative", "special"):
+        columns = ["name", "value"]
+    else:
+        # Quantitative results retain the designer's selected columns.
+        columns = [
+            key for key in results.get("columns", [])
+            if key in RESULT_LABELS
+        ]
+        if not columns:
+            columns = ["name", "value", "unit", "reference_range"]
+
+        # Hide columns that have no data when the saved designer is using the
+        # standard automatic four-column layout. This keeps observation-heavy
+        # reports clean without changing the designer's explicit choice.
+        standard = ["name", "value", "unit", "reference_range"]
+        if columns == standard:
+            if not any(str(r.get("unit") or "").strip() for r in rows):
+                columns.remove("unit")
+            if not any(str(r.get("reference_range") or "").strip() for r in rows):
+                columns.remove("reference_range")
+
+    weights = {
+        "name": 2.5,
+        "value": 1.0,
+        "unit": 1.0,
+        "reference_range": 1.4,
+    }
+    raw = [weights.get(k, 1.0) for k in columns]
+    total = sum(raw) or 1.0
+    widths = [available_width * weight / total for weight in raw]
+
+    data = [[Paragraph(RESULT_LABELS[k], header_style) for k in columns]]
     for row in rows:
         data.append([
             Paragraph(
-                _safe_text(row.get(key, "")),                abnormal_value_style if key == "value" and row.get("abnormal") else (value_style if key == "value" else text_style),
+                _safe_text(row.get(key, "")),
+                abnormal_value_style
+                if key == "value" and row.get("abnormal")
+                else (value_style if key == "value" else text_style),
             )
             for key in columns
         ])
@@ -559,10 +672,8 @@ def _result_table(title, rows, layout, styles, available_width):
         results.get("row_alt_background"),
         colors.HexColor("#FBFCFE"),
     )
-
     style_cmds = [
         ("BACKGROUND", (0, 0), (-1, 0), header_bg),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 6 * 0.75),
         ("RIGHTPADDING", (0, 0), (-1, -1), 6 * 0.75),
@@ -572,15 +683,10 @@ def _result_table(title, rows, layout, styles, available_width):
         ("BOTTOMPADDING", (0, 1), (-1, -1), float(results.get("row_spacing", 5)) * 0.75),
         ("LINEBELOW", (0, 0), (-1, -1), 1 * 0.75, border),
     ]
-
     for row_index in range(2, len(data), 2):
-        style_cmds.append(
-            ("BACKGROUND", (0, row_index), (-1, row_index), row_alt)
-        )
-
+        style_cmds.append(("BACKGROUND", (0, row_index), (-1, row_index), row_alt))
     if results.get("show_grid", False):
         style_cmds.append(("GRID", (0, 0), (-1, -1), 0.35, border))
-
     table.setStyle(TableStyle(style_cmds))
 
     section_header = []
@@ -592,7 +698,13 @@ def _result_table(title, rows, layout, styles, available_width):
         section_style = ParagraphStyle(
             "section_dynamic",
             parent=styles["section"],
-            fontName=_styled_font(layout, results.get("section_style", "bold" if results.get("section_bold", True) else "normal")),
+            fontName=_styled_font(
+                layout,
+                results.get(
+                    "section_style",
+                    "bold" if results.get("section_bold", True) else "normal",
+                ),
+            ),
             fontSize=float(results.get("section_font_size", 7.9)) * 0.75,
             leading=(float(results.get("section_font_size", 7.9)) + 1) * 0.75,
             textColor=_color(results.get("section_text"), colors.black),
@@ -601,7 +713,7 @@ def _result_table(title, rows, layout, styles, available_width):
         pad = max(2, float(results.get("section_padding", 5))) * 0.75
         section_header = [
             Table(
-                [[Paragraph(str(title).upper(), section_style)]],
+                [[Paragraph(_safe_text(str(title).upper()), section_style)]],
                 colWidths=[available_width],
                 hAlign="LEFT",
                 style=TableStyle([
@@ -821,10 +933,78 @@ def _build_story(data, layout, available_width):
     tests = data.get("tests") or []
     grouped_tests = _group_tests(tests, layout)
     dynamic_test_type = _dynamic_test_type(data, grouped_tests)
+
+    # Keep the designer's editable section title, while the actual clinical
+    # test type remains dynamic and comes from the extracted report.
+    section_title = str(
+        layout["results"].get("section_title") or "EXAMINATION RESULTS"
+    ).strip()
+    if section_title:
+        section_label_style = ParagraphStyle(
+            "report_section_label",
+            parent=styles["section"],
+            fontName=_styled_font(
+                layout,
+                layout["results"].get("section_style", "bold"),
+            ),
+            fontSize=float(layout["results"].get("section_font_size", 8)) * 0.75,
+            leading=(float(layout["results"].get("section_font_size", 8)) + 1) * 0.75,
+            textColor=_color(
+                layout["results"].get("section_text"),
+                text_color,
+            ),
+            alignment=_alignment(
+                layout["results"].get("section_align", "left")
+            ),
+        )
+        story.append(
+            Table(
+                [[Paragraph(_safe_text(section_title).upper(), section_label_style)]],
+                colWidths=[available_width],
+                hAlign="LEFT",
+                style=TableStyle([
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (-1, -1),
+                        _color(
+                            layout["results"].get("section_background"),
+                            colors.HexColor("#ECEAFB"),
+                        ),
+                    ),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 8 * 0.75),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 8 * 0.75),
+                    ("TOPPADDING", (0, 0), (-1, -1), 5 * 0.75),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5 * 0.75),
+                ]),
+            )
+        )
+        story.append(Spacer(1, 3 * 0.75))
+
+    test_type_style = ParagraphStyle(
+        "dynamic_test_type",
+        parent=styles["department"],
+        fontName=_styled_font(
+            layout,
+            layout["results"].get("section_style", "bold"),
+        ),
+        fontSize=float(layout["results"].get("section_font_size", 8)) * 0.75,
+        leading=(float(layout["results"].get("section_font_size", 8)) + 2) * 0.75,
+        textColor=_color(
+            layout["results"].get("section_text"),
+            text_color,
+        ),
+        alignment=_alignment(
+            layout["results"].get("section_align", "left")
+        ),
+        spaceAfter=5 * 0.75,
+    )
+    story.append(
+        Paragraph(_safe_text(dynamic_test_type), test_type_style)
+    )
+
     for section, rows in grouped_tests:
-        # The secondary header identifies the incoming report/test type.
-        # Its typography remains entirely controlled by the saved designer settings.
-        story.extend(_result_table(dynamic_test_type, rows, layout, styles, available_width))
+        story.extend(_result_table(section, rows, layout, styles, available_width))
 
     if not tests:
         story.append(
