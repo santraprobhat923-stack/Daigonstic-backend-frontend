@@ -109,17 +109,28 @@ async function pending(force=false){
   if(jobs.some(x=>String(x.status||"").toUpperCase()==="OCR_PROCESSING"))pendingPollTimer=setTimeout(pending,1600);
 }
 async function verifyJob(id){
+  // Review is isolated to the selected report. Never fetch the whole queue
+  // here, because other OCR jobs may still be running.
   if(pendingPollTimer){clearTimeout(pendingPollTimer);pendingPollTimer=null;}
   activeReviewId=id;
   ++pendingViewGeneration;
   currentPage="capture";
   try{
-    const r=await api("/api/reports");
-    const x=r.find(v=>String(v.id)===String(id));
+    const x=await api("/api/reports/"+encodeURIComponent(id));
     if(!x){activeReviewId=null;return alert("Report no longer exists");}
-    if(String(x.status||"").toUpperCase()==="OCR_PROCESSING"){activeReviewId=null;return pending();}
+    if(String(x.status||"").toUpperCase()==="OCR_PROCESSING"){
+      activeReviewId=null;
+      return pending();
+    }
+    if(String(x.status||"").toUpperCase()!=="OCR_REVIEW"){
+      activeReviewId=null;
+      return alert("This report is not ready for technician review.");
+    }
     verify(id,x.verified_data||{patient:{},tests:[]});
-  }catch(e){activeReviewId=null;alert(e.message)}
+  }catch(e){
+    activeReviewId=null;
+    alert(e.message);
+  }
 }
 function pendingRows(r){
   if(!r.length)return '<div class="empty-state"><h3>Queue is clear</h3><p class="muted">New uploaded slips will appear here when they are ready for technician verification.</p><button class="primary" onclick="capture()">＋ Upload reports</button></div>';
