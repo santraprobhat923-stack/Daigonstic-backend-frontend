@@ -1,5 +1,5 @@
 import pymupdf
-import json,secrets,hmac,hashlib
+import json,secrets,hmac,hashlib,tempfile,shutil,subprocess
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 from pathlib import Path
@@ -285,6 +285,72 @@ def process_ocr(report_id, centre_id, paths):
 
 def awaitable_read(f):
     return f.file.read()
+
+@app.post("/api/reports/upload")
+def upload_reports(files:list[UploadFile]=File(...),c=Depends(current),db:Session=Depends(get_db)):
+    if not files:
+        raise HTTPException(400,"Add at least one report image")
+
+    allowed={".jpg",".jpeg",".png",".webp",".bmp",".tif",".tiff",".pdf"}
+    centre_dir=STORAGE_DIR/f"centre_{c.id}"/"images"
+    centre_dir.mkdir(parents=True,exist_ok=True)
+    created=[]
+    duplicates=0
+
+    for file in files:
+        filename=Path(file.filename or "").name
+        suffix=Path(filename).suffix.lower()
+        content_type=(file.content_type or "").lower()
+        if suffix not in allowed and not content_type.startswith("image/"):
+            raise HTTPException(400,f"Unsupported file type: {filename}")
+
+        raw=file.file.read()
+        if not raw:
+            raise HTTPException(400,f"Empty file: {filename}")
+
+        image_hash=sha(raw)
+        existing=None
+        try:
+            candidates=db.query(Report).filter_by(centre_id=c.id).all()
+            for candidate in candidates:
+                try:
+                    hashes=json.loads(candidate.image_hashes or "[]")
+                except Exception:
+                    hashes=[]
+                if image_hash in hashes:
+                    existing=candidate
+                    break
+        except Exception:
+            existing=None
+
+        if existing:
+            duplicates+=1
+            continue
+
+        stored=centre_dir/f"{secrets.token_hex(10)}_{filename or 'report'+suffix}"
+        stored.write_bytes(raw)
+
+        report=Report(
+            centre_id=c.id,
+            status="OCR_PROCESSING",
+            image_paths=json.dumps([str(stored)]),
+            image_hashes=json.dumps([image_hash]),
+            token=secrets.token_urlsafe(24),
+            verified_data=json.dumps({"patient":{},"tests":[],"report":{}},ensure_ascii=False),
+        )
+        db.add(report)
+        db.commit()
+        db.refresh(report)
+
+        created.append(report)
+        OCR_EXECUTOR.submit(process_ocr,report.id,c.id,[str(stored)])
+
+    return {
+        "uploaded_count":len(created),
+        "duplicate_count":duplicates,
+        "reports":[report_dict(r) for r in created],
+        "report":report_dict(created[0]) if len(created)==1 else None,
+    }
 
 @app.get("/api/reports/{rid}")
 def report_detail(rid:int,c=Depends(current),db:Session=Depends(get_db)):
