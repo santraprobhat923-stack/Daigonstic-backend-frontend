@@ -10,7 +10,7 @@ from .config import CLOUDFLARE_ACCOUNT_ID,CLOUDFLARE_API_TOKEN,CLOUDFLARE_AI_MOD
 URL="https://api.cloudflare.com/client/v4/accounts/{}/ai/run/{}"
 REFERENCE_FILE=Path(__file__).resolve().parent/"data"/"medical_tests.json"
 
-SYSTEM="""You are Aarogyam laboratory document extraction AI. Read the supplied image pages visually and semantically. Extract only what is visible; never invent credentials, values, units, reference ranges, methods or comments. Input may be digital analyzer slips, scanned reports, handwritten notes, pathology/histopathology reports, microbiology reports, urine/stool examinations, blood grouping or legacy reports. Understand tables, columns, labels, handwriting and narrative paragraphs.
+SYSTEM="""You are Aarogyam clinical document understanding AI. Your primary task is to understand the visual information in the supplied image/document, regardless of its source or format. It may be a laboratory slip, analyzer display photo, computer-screen screenshot, WhatsApp screenshot, photograph of a printed report, scanned report, handwritten report, PDF page, pathology/histopathology report, microbiology report, urine/stool examination, blood grouping document, referral note, or another clinical report. Do not classify the source before extracting it; understand the actual visible data and its meaning. Extract only what is visible; never invent credentials, values, units, reference ranges, methods or comments. Understand tables, columns, labels, handwriting, screenshots, photographs, mixed layouts and narrative paragraphs.
 
 Return ONLY JSON with:
 patient_credentials: name, age, gender, patient_id, uhid, referring_doctor, received_on, reported_on, phone.
@@ -175,7 +175,7 @@ def normalize(data):
 def extract_with_cloudflare(paths):
     if not CLOUDFLARE_ACCOUNT_ID or not CLOUDFLARE_API_TOKEN:
         raise RuntimeError("Cloudflare AI is not configured. Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN.")
-    body={"messages":[{"role":"system","content":SYSTEM},{"role":"user","content":[{"type":"text","text":"Extract this entire laboratory document into the requested JSON. Combine all supplied pages. Do not invent missing data."}]+_parts(paths)}],"temperature":0,"max_tokens":6000,"chat_template_kwargs":{"enable_thinking":False}}
+    body={"messages":[{"role":"system","content":SYSTEM},{"role":"user","content":[{"type":"text","text":"Understand and extract the complete supplied clinical image/document into the requested JSON. The source may be any image, screenshot, photograph, scanned/printed report, analyzer display, WhatsApp image, or PDF page. Combine all supplied pages/images when there are multiple inputs. Do not invent missing data."}]+_parts(paths)}],"temperature":0,"max_tokens":6000,"chat_template_kwargs":{"enable_thinking":False}}
     r=requests.post(URL.format(CLOUDFLARE_ACCOUNT_ID,CLOUDFLARE_AI_MODEL),headers={"Authorization":"Bearer "+CLOUDFLARE_API_TOKEN,"Content-Type":"application/json","User-Agent":"Aarogyam/1.0"},json=body,timeout=CLOUDFLARE_AI_TIMEOUT)
     if r.status_code>=400: raise RuntimeError("Cloudflare AI request failed ("+str(r.status_code)+"): "+r.text[:600])
     payload=r.json()
