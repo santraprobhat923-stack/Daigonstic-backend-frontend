@@ -173,9 +173,43 @@ async def razorpay_webhook(request:Request,db:Session=Depends(get_db)):
                 notify(db,centre.id,None,"CREDIT_RECHARGE",f"{row.credits} credits added successfully.")
                 db.commit()
     return {"ok":True}
+def _norm_dup_value(value):
+    import re
+    return re.sub(r"\\s+", " ", str(value or "").strip().casefold())
+
+def _clinical_duplicate_key(data):
+    p=data.get("patient") or {}
+    identity=(
+        _norm_dup_value(p.get("name")),
+        _norm_dup_value(p.get("age")),
+        _norm_dup_value(p.get("sex")),
+        _norm_dup_value(p.get("phone")),
+        _norm_dup_value(p.get("code")),
+        _norm_dup_value(p.get("uhid")),
+    )
+    if not any(identity):
+        return ""
+    tests=[]
+    for t in data.get("tests") or []:
+        if not isinstance(t,dict):
+            continue
+        name=_norm_dup_value(t.get("name"))
+        value=_norm_dup_value(t.get("value"))
+        if not name or not value:
+            continue
+        tests.append((
+            _norm_dup_value(t.get("section")),
+            name,
+            value,
+            _norm_dup_value(t.get("unit")),
+            _norm_dup_value(t.get("reference_range")),
+        ))
+    if not tests:
+        return ""
+    payload=json.dumps({"patient":identity,"tests":sorted(tests)},ensure_ascii=False,separators=(",",":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
 def process_ocr(report_id, centre_id, paths):
-    # Do not hold a SQLite/SQLAlchemy session open while waiting for the remote
-    # Cloudflare Workers AI request. Slow network work must be DB-session-free.
     db=SessionLocal()
     try:
         r=db.get(Report,report_id)
@@ -198,20 +232,44 @@ def process_ocr(report_id, centre_id, paths):
         except Exception as e:
             errors.append(f"OCR failed for {Path(raw_path).name}: {e}")
 
-    # Re-open a fresh session only for the short DB update.
+    duplicate_key=_clinical_duplicate_key(merged)
     db=SessionLocal()
     try:
         r=db.get(Report,report_id)
         if not r or r.centre_id!=centre_id:
             return
-        r.verified_data=json.dumps(merged,ensure_ascii=False)
-        r.ocr_text="\n".join(texts + errors)
-        p=merged.get("patient",{})
-        r.patient_name=p.get("name",""); r.patient_age=p.get("age",""); r.patient_sex=p.get("sex","")
-        r.patient_phone=p.get("phone",""); r.patient_code=p.get("code","")
-        r.status="OCR_REVIEW"
-        notify(db,centre_id,report_id,"OCR_READY",f"Report #{report_id} is ready for technician verification.")
-        db.commit()
+        with DUPLICATE_LOCK:
+            duplicate=None
+            if duplicate_key:
+                duplicate=db.query(Report).filter(
+                    Report.centre_id==centre_id,
+                    Report.duplicate_key==duplicate_key,
+                    Report.id!=report_id,
+                    Report.status!="DUPLICATE"
+                ).order_by(Report.id.asc()).first()
+            if duplicate:
+                r.verified_data=json.dumps(merged,ensure_ascii=False)
+                r.ocr_text="\\n".join(texts + errors)
+                r.duplicate_key=duplicate_key
+                r.status="DUPLICATE"
+                db.commit()
+                for raw_path in paths:
+                    try:
+                        p=Path(raw_path)
+                        if p.is_file(): p.unlink()
+                    except Exception:
+                        pass
+                return
+            if duplicate_key:
+                r.duplicate_key=duplicate_key
+            r.verified_data=json.dumps(merged,ensure_ascii=False)
+            r.ocr_text="\\n".join(texts + errors)
+            p=merged.get("patient",{})
+            r.patient_name=p.get("name",""); r.patient_age=p.get("age",""); r.patient_sex=p.get("sex","")
+            r.patient_phone=p.get("phone",""); r.patient_code=p.get("code","")
+            r.status="OCR_REVIEW"
+            notify(db,centre_id,report_id,"OCR_READY",f"Report #{report_id} is ready for technician verification.")
+            db.commit()
     except Exception:
         db.rollback()
         try:
@@ -224,63 +282,6 @@ def process_ocr(report_id, centre_id, paths):
             db.rollback()
     finally:
         db.close()
-
-@app.post("/api/reports/upload")
-def upload(files:list[UploadFile]=File(...),c=Depends(current),db:Session=Depends(get_db)):
-    duplicates=0
-    existing_hashes=set()
-    for raw in db.query(Report.image_hashes).filter_by(centre_id=c.id).all():
-        try: existing_hashes.update(json.loads(raw[0] or "[]"))
-        except Exception: pass
-
-    created=[]
-    seen=set()
-    for f in files:
-        data=awaitable_read(f)
-        if not data: continue
-        h=sha(data)
-        if h in seen or h in existing_hashes:
-            duplicates+=1
-            continue
-        seen.add(h)
-        p=STORAGE_DIR/f"centre_{c.id}"/"images"/(secrets.token_hex(8)+"_"+Path(f.filename or "image").name)
-        p.parent.mkdir(parents=True,exist_ok=True)
-        p.write_bytes(data)
-
-        # Every physical report image is its own independent Aarogyam job.
-        # This keeps bulk intake separate: one slip -> one OCR job -> one
-        # verification item -> one generated report/credit.
-        r=Report(
-            centre_id=c.id,
-            token=secrets.token_urlsafe(32),
-            verified_data=json.dumps({"patient":{},"tests":[],"report":{}}),
-            ocr_text="",
-            image_paths=json.dumps([str(p)]),
-            image_hashes=json.dumps([h]),
-            status="OCR_PROCESSING"
-        )
-        db.add(r)
-        db.flush()
-        created.append(r)
-
-    if not created:
-        if duplicates: raise HTTPException(409,"These images were already uploaded. No new report was created.")
-        raise HTTPException(400,"No image received")
-
-    db.commit()
-    # Submit each slip independently. The technician can review the first
-    # completed report while slower slips continue processing in parallel.
-    for r in created:
-        OCR_EXECUTOR.submit(process_ocr,r.id,c.id,[json.loads(r.image_paths)[0]])
-
-    return {
-        "reports":[report_dict(r) for r in created],
-        "report":report_dict(created[0]),
-        "extracted":{"patient":{},"tests":[],"report":{}},
-        "uploaded_count":len(created),
-        "duplicate_count":duplicates,
-        "ocr_status":"PROCESSING"
-    }
 
 def awaitable_read(f):
     return f.file.read()
