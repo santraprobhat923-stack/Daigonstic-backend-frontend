@@ -267,6 +267,15 @@ def upload(files:list[UploadFile]=File(...),c=Depends(current),db:Session=Depend
 def awaitable_read(f):
     return f.file.read()
 
+@app.get("/api/reports/{rid}")
+def report_detail(rid:int,c=Depends(current),db:Session=Depends(get_db)):
+    # Fetch exactly one report for technician review. Do not make Review depend
+    # on the full queue, because other OCR jobs may still be processing.
+    r=db.get(Report,rid)
+    if not r or r.centre_id!=c.id:
+        raise HTTPException(404,"Report not found")
+    return report_dict(r)
+
 @app.get("/api/reports/{rid}/source")
 def report_source(rid:int,c=Depends(current),db:Session=Depends(get_db)):
     r=db.get(Report,rid)
