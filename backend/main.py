@@ -1,5 +1,6 @@
 import pymupdf
 import json,secrets,hmac,hashlib
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from fastapi import FastAPI,UploadFile,File,Form,HTTPException,Request,Depends,BackgroundTasks
 from fastapi.responses import FileResponse,HTMLResponse,Response
@@ -13,6 +14,9 @@ from .config import STORAGE_DIR,CREDIT_PRICE_INR,WHATSAPP_PROVIDER,WHATSAPP_PAYM
 from .services import extract,sha,notify,queue_wa,make_pdf,report_dict
 from .workers.whatsapp_worker import start_worker
 from .superadmin import router as superadmin_router,ensure_superadmin,setting as system_setting
+
+# OCR jobs run independently so one slow slip never blocks other slips from review.
+OCR_EXECUTOR=ThreadPoolExecutor(max_workers=4,thread_name_prefix="aarogyam-ocr")
 try: import razorpay
 except Exception: razorpay=None
 Base.metadata.create_all(engine)
@@ -204,7 +208,7 @@ def process_ocr(report_id, centre_id, paths):
         db.close()
 
 @app.post("/api/reports/upload")
-def upload(background_tasks:BackgroundTasks,files:list[UploadFile]=File(...),c=Depends(current),db:Session=Depends(get_db)):
+def upload(files:list[UploadFile]=File(...),c=Depends(current),db:Session=Depends(get_db)):
     duplicates=0
     existing_hashes=set()
     for raw in db.query(Report.image_hashes).filter_by(centre_id=c.id).all():
@@ -246,8 +250,10 @@ def upload(background_tasks:BackgroundTasks,files:list[UploadFile]=File(...),c=D
         raise HTTPException(400,"No image received")
 
     db.commit()
+    # Submit each slip independently. The technician can review the first
+    # completed report while slower slips continue processing in parallel.
     for r in created:
-        background_tasks.add_task(process_ocr,r.id,c.id,[json.loads(r.image_paths)[0]])
+        OCR_EXECUTOR.submit(process_ocr,r.id,c.id,[json.loads(r.image_paths)[0]])
 
     return {
         "reports":[report_dict(r) for r in created],
