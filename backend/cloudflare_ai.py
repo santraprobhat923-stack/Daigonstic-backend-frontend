@@ -19,7 +19,7 @@ result_sections: an array of sections. Each section has section and items. Each 
 
 Use result_type as quantitative, qualitative, observation, narrative or special when the document clearly supports that interpretation. Unit and reference_range are OPTIONAL and must be empty/omitted when not visible. Never discard a clinically relevant result because it has no unit or reference range. Preserve Positive/Negative/Reactive/Nil/Present/Absent, descriptive observations, culture organisms/sensitivity, blood group, and narrative findings. For narrative reports, preserve the meaningful text under an appropriate item/section rather than inventing a numeric result.
 
-Reference ranges must come from the document, never medical knowledge. Extract every visible clinically relevant result. Preserve questionable digits rather than guessing. Unknown or uncommon tests must be returned exactly as seen; do not reject them because they are absent from any reference list."""
+Reference ranges must come from the document, never medical knowledge. Extract every visible clinically relevant result, BUT EXCLUDE NON-CLINICAL OPERATIONAL/MACHINE METADATA. Never return analyzer operational lines such as CALIBRATION STATUS, CALIBRATION, QC, QUALITY CONTROL, reagent lot/batch/expiry information, cuvette lot/batch information, cartridge/kit lot numbers, machine/instrument/device status, maintenance/service messages, printer/device diagnostics, internal run IDs, barcode/QR text, rack/position/cuvette identifiers, or similar instrument-control text. A line is not a clinical result merely because it contains a number. Only return a test parameter when it represents a patient clinical measurement, qualitative observation, or narrative clinical finding. Preserve questionable clinical digits rather than guessing. Unknown or uncommon clinical tests must be returned exactly as seen; do not reject them because they are absent from any reference list."""
 def _img(img):
     img=ImageOps.exif_transpose(img).convert("RGB"); m=1800
     if max(img.size)>m:
@@ -97,6 +97,15 @@ def _reference():
         return {}
 TEST_REFERENCE=_reference()
 
+OPERATIONAL_METADATA_RE = re.compile(r"(?:^|\b)(?:calibration(?:\s+status|\s+ok)?|qc(?:\s+(?:status|passed|pass|ok|failed|fail))?|quality\s+control(?:\s+(?:status|passed|pass|ok|failed|fail))?|reagent(?:\s+(?:lot|batch|expiry|expiration|exp))?|cuvette(?:\s+(?:lot|batch|id))?|cartridge(?:\s+(?:lot|batch|id))?|kit(?:\s+(?:lot|batch|id))?|machine(?:\s+status)?|instrument(?:\s+status)?|device(?:\s+(?:status|diagnostic))?|maintenance|service(?:\s+(?:mode|status))?|barcode|bar\s*code|qr(?:\s*code)?|run(?:\s+id)?|rack(?:\s+(?:no|number|id))?|position(?:\s+(?:no|number|id))?)(?:\b|\s*[:#=-])",re.I)
+def _is_operational_metadata(name,value=""):
+    n=_clean(name); v=_clean(value)
+    if not n: return True
+    if OPERATIONAL_METADATA_RE.search(n) or OPERATIONAL_METADATA_RE.search((n+" "+v)[:240]): return True
+    compact=re.sub(r"[^A-Za-z0-9]","",n)
+    if compact and len(compact)>=8 and re.fullmatch(r"[A-Za-z0-9]+",compact) and re.search(r"\d",compact) and re.search(r"[A-Za-z]",compact) and not re.search(r"\s",n): return True
+    return False
+
 def _canonicalize(name):
     clean=re.sub(r"\s+"," ",_clean(name)).strip(" :-|")
     key=re.sub(r"[^a-z0-9]+","",clean.lower())
@@ -128,6 +137,7 @@ def normalize(data):
         name,meta=_canonicalize(raw_name)
         value=_clean(raw_value)
         if not name or not value: continue
+        if _is_operational_metadata(name,value): continue
         section=_clean(section) or meta.get("section") or "Examination Results"
         if section=="Examination Results" and meta.get("section"): section=meta["section"]
         t={
