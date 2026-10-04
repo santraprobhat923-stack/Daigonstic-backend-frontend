@@ -171,22 +171,37 @@ async def razorpay_webhook(request:Request,db:Session=Depends(get_db)):
                 db.commit()
     return {"ok":True}
 def process_ocr(report_id, centre_id, paths):
+    # Do not hold a SQLite/SQLAlchemy session open while waiting for the remote
+    # Cloudflare Workers AI request. Slow network work must be DB-session-free.
     db=SessionLocal()
     try:
         r=db.get(Report,report_id)
-        if not r or r.centre_id!=centre_id: return
-        merged={"patient":{},"tests":[],"report":{}}; texts=[]; errors=[]
-        for raw_path in paths:
-            try:
-                t,d=extract(raw_path); texts.append(t)
-                for k,v in d["patient"].items():
-                    if v and not merged["patient"].get(k): merged["patient"][k]=v
-                merged["tests"]+=d["tests"]
-                for k,v in d.get("report",{}).items():
-                    if v and not merged["report"].get(k): merged["report"][k]=v
-            except Exception as e:
-                errors.append(f"OCR failed for {Path(raw_path).name}: {e}")
-        r.verified_data=json.dumps(merged)
+        if not r or r.centre_id!=centre_id:
+            return
+    finally:
+        db.close()
+
+    merged={"patient":{},"tests":[],"report":{}}; texts=[]; errors=[]
+    for raw_path in paths:
+        try:
+            t,d=extract(raw_path); texts.append(t)
+            for k,v in d["patient"].items():
+                if v and not merged["patient"].get(k):
+                    merged["patient"][k]=v
+            merged["tests"]+=d["tests"]
+            for k,v in d.get("report",{}).items():
+                if v and not merged["report"].get(k):
+                    merged["report"][k]=v
+        except Exception as e:
+            errors.append(f"OCR failed for {Path(raw_path).name}: {e}")
+
+    # Re-open a fresh session only for the short DB update.
+    db=SessionLocal()
+    try:
+        r=db.get(Report,report_id)
+        if not r or r.centre_id!=centre_id:
+            return
+        r.verified_data=json.dumps(merged,ensure_ascii=False)
         r.ocr_text="\n".join(texts + errors)
         p=merged.get("patient",{})
         r.patient_name=p.get("name",""); r.patient_age=p.get("age",""); r.patient_sex=p.get("sex","")
