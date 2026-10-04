@@ -95,8 +95,10 @@ async function upload(){
   }
 }
 async function pending(){
+  // Never let a queued/stale poll interrupt an active technician review.
+  // Clearing the timer is not enough because a callback may already be running.
+  if(activeReviewId!==null)return;
   if(pendingPollTimer){clearTimeout(pendingPollTimer);pendingPollTimer=null;}
-  activeReviewId=null;
   const generation=++pendingViewGeneration;
   currentPage="pending";
   const r=await api("/api/reports");
@@ -121,8 +123,11 @@ async function verifyJob(id){
 function pendingRows(r){
   if(!r.length)return '<div class="empty-state"><h3>Queue is clear</h3><p class="muted">New uploaded slips will appear here when they are ready for technician verification.</p><button class="primary" onclick="capture()">＋ Upload reports</button></div>';
   return '<div class="pending-list">'+r.map(x=>{
+    const id=String(x.id);
     const processing=String(x.status||"").toUpperCase()==="OCR_PROCESSING";
-    return '<div class="pending-item"><div class="pending-main"><span class="pending-id">#'+x.id+'</span><div><b>'+esc(x.patient_name||"Patient details pending OCR")+'</b><p class="muted">'+(processing?"OCR is reading the analyzer slip…":"OCR complete · review required")+'</p></div></div><div class="pending-action">'+(processing?'<span class="badge">PROCESSING OCR</span>':'<button class="primary" onclick="verifyJob('+x.id+')">Review</button>')+'</div></div>'
+    // Each card owns its own action. Processing one report never disables
+    // Review on another completed report.
+    return '<div class="pending-item" data-report-id="'+esc(id)+'"><div class="pending-main"><span class="pending-id">#'+esc(id)+'</span><div><b>'+esc(x.patient_name||"Patient details pending OCR")+'</b><p class="muted">'+(processing?"OCR is reading the clinical document…":"OCR complete · review required")+'</p></div></div><div class="pending-action">'+(processing?'<span class="badge">PROCESSING OCR</span>':'<button type="button" class="primary" data-review-id="'+esc(id)+'" onclick="verifyJob(this.dataset.reviewId)">Review</button>')+'</div></div>'
   }).join("")+'</div>';
 }
 
