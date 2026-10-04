@@ -49,6 +49,8 @@ async function startRecharge(quantity){
 }
 let intakeFiles=[];
 let pendingPollTimer=null;
+let pendingViewGeneration=0;
+let activeReviewId=null;
 function capture(){currentPage="capture";intakeFiles=[];app.innerHTML=shell('<div class="wrap"><div class="page-head"><div><div class="eyebrow">Report intake</div><h1>New report</h1><p>Take photos, scanned PDFs or choose existing laboratory documents. You can collect several slips before starting AI extraction.</p></div></div><div class="card"><div class="upload-zone"><div class="upload-icon">▣</div><h3>Capture diagnostic report</h3><p class="muted">Use the centre phone camera for a fresh slip, or choose images/PDF reports from the gallery.</p><div class="capture-actions"><button type="button" class="primary" onclick="openCamera()">📷 Take Photo</button><button type="button" onclick="openGallery()">📁 Choose from Gallery</button></div><input id="cameraInput" type="file" accept="image/*" capture="environment" hidden onchange="addCameraFile(this.files[0]);this.value="""><input id="imgs" type="file" accept="image/*,.pdf,application/pdf" multiple hidden onchange="addGalleryFiles(this.files)"><div id="selectedFiles" class="selected-files" aria-live="polite">No images selected yet.</div><div id="selectedFileList" class="selected-file-list"></div><button id="uploadStartBtn" class="primary" onclick="upload()" disabled>Upload & start OCR</button><div id="uploadStatus" class="upload-status" role="status" aria-live="polite"><span class="upload-ready">✓</span><div><b>Ready</b><small>Add one or more laboratory documents. Cloudflare AI starts after you tap Upload & start OCR.</small></div></div></div><p class="footer-note">OCR is draft data. A technician reviews and approves every report before it is finalized.</p></div></div>')}
 function openCamera(){document.getElementById("cameraInput")?.click()}
 function openGallery(){document.getElementById("imgs")?.click()}
@@ -94,21 +96,27 @@ async function upload(){
 }
 async function pending(){
   if(pendingPollTimer){clearTimeout(pendingPollTimer);pendingPollTimer=null;}
+  activeReviewId=null;
+  const generation=++pendingViewGeneration;
   currentPage="pending";
   const r=await api("/api/reports");
+  if(generation!==pendingViewGeneration||currentPage!=="pending"||activeReviewId!==null)return;
   const jobs=r.filter(x=>["OCR_PROCESSING","OCR_REVIEW"].includes(String(x.status||"").toUpperCase()));
   app.innerHTML=shell('<div class="wrap"><div class="page-head"><div><div class="eyebrow">Technician queue</div><h1>Pending verification</h1><p>Upload many slips first, then review them here as OCR finishes.</p></div><div class="actions"><button class="primary" onclick="capture()">＋ Upload more</button></div></div><div class="card"><div id="pendingList">'+pendingRows(jobs)+'</div></div></div>');
   if(jobs.some(x=>String(x.status||"").toUpperCase()==="OCR_PROCESSING"))pendingPollTimer=setTimeout(pending,1600);
 }
 async function verifyJob(id){
   if(pendingPollTimer){clearTimeout(pendingPollTimer);pendingPollTimer=null;}
+  activeReviewId=id;
+  ++pendingViewGeneration;
+  currentPage="capture";
   try{
     const r=await api("/api/reports");
-    const x=r.find(v=>v.id===id);
-    if(!x)return alert("Report no longer exists");
-    if(String(x.status||"").toUpperCase()==="OCR_PROCESSING")return pending();
+    const x=r.find(v=>String(v.id)===String(id));
+    if(!x){activeReviewId=null;return alert("Report no longer exists");}
+    if(String(x.status||"").toUpperCase()==="OCR_PROCESSING"){activeReviewId=null;return pending();}
     verify(id,x.verified_data||{patient:{},tests:[]});
-  }catch(e){alert(e.message)}
+  }catch(e){activeReviewId=null;alert(e.message)}
 }
 function pendingRows(r){
   if(!r.length)return '<div class="empty-state"><h3>Queue is clear</h3><p class="muted">New uploaded slips will appear here when they are ready for technician verification.</p><button class="primary" onclick="capture()">＋ Upload reports</button></div>';
@@ -121,6 +129,8 @@ function pendingRows(r){
 function testRow(t={},i=0){const abnormal=!!t.abnormal;const badge=abnormal?'<span style="font-weight:800;color:#111827;margin-left:8px">⚠ '+esc(t.abnormal_status||"ABNORMAL")+'</span>':"";return '<div class="test-card"><div class="test-title"><span>Test result '+(i+1)+'</span>'+badge+'<button type="button" class="remove-test danger" onclick="this.parentElement.parentElement.remove()">Remove</button></div><div class="test-fields"><div class="field"><label>SECTION</label><input data-k="section" placeholder="e.g. Physical Examination" value="'+esc(t.section||"Examination Results")+'"></div><div class="field"><label>PROPERTY / TEST</label><input data-k="name" placeholder="AI-extracted test name" value="'+esc(t.name)+'"></div><div class="field"><label>RESULT / VALUE</label><input data-k="value" style="'+(abnormal?"font-weight:800;color:#111827":"")+'" placeholder="AI-extracted result" value="'+esc(t.value)+'"></div><div class="field"><label>UNIT</label><input data-k="unit" placeholder="Unit (if present)" value="'+esc(t.unit)+'"></div><div class="field"><label>REFERENCE RANGE</label><input data-k="reference_range" placeholder="e.g. 40-60" value="'+esc(t.reference_range||"")+'"></div></div></div>'}
 async function loadSource(id){try{const r=await fetch("/api/reports/"+id+"/source",{headers:{Authorization:"Bearer "+token}});if(!r.ok)throw Error("Source unavailable");const b=await r.blob(),u=URL.createObjectURL(b),frame=document.getElementById("sourceFrame");if(!frame)return;const type=(b.type||"").toLowerCase();if(type.startsWith("image/")){const img=document.createElement("img");img.id="sourceImage";img.alt="Original laboratory document";img.src=u;img.style.cssText="display:block;width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;background:#f7f8fa;border:1px solid #E1E5EC;border-radius:12px";frame.replaceWith(img);setTimeout(()=>URL.revokeObjectURL(u),300000)}else{frame.src=u;frame.style.width="100%";frame.style.height="100%";frame.style.minHeight="720px";setTimeout(()=>URL.revokeObjectURL(u),300000)}}catch(e){const el=document.getElementById("sourceFrame")||document.getElementById("sourceImage");if(el)el.outerHTML="<div class=\"notice\"><b>Original document unavailable.</b><br><span class=\"muted\">"+esc(e.message)+"</span></div>"}}
 function verify(id,d){
+  activeReviewId=id;
+  ++pendingViewGeneration;
   currentPage="capture";
   const p=d.patient||{},tests=d.tests||[],meta=d.report||{};
   app.innerHTML=shell('<div class="wrap"><div class="page-head"><div><div class="eyebrow">Technician review</div><h1>Verify report #'+id+'</h1><p>Confirm the OCR result before generating the centre PDF.</p></div><span class="badge">DRAFT · REVIEW REQUIRED</span></div><div class="two-col"><div class="card source-card"><h3>Original document</h3><p class="muted">Compare the uploaded slip/report with the AI extraction.</p><iframe id="sourceFrame" title="Original laboratory document" style="width:100%;height:720px;border:1px solid #E1E5EC;border-radius:12px;background:#F7F8FA"></iframe></div><div class="card verify-card"><div class="verify-banner"><div><b>Review carefully</b><div class="muted">OCR is draft data. Edit patient credentials, report headings and every test value before approval.</div></div><span class="eyebrow">Report '+id+'</span></div><h3>Patient information</h3><div class="grid" style="grid-template-columns:repeat(4,minmax(0,1fr))">'+[['name','Patient name'],['age','Age'],['sex','Sex'],['phone','WhatsApp number'],['code','Patient ID'],['uhid','UHID'],['referred_by','Referred by'],['received_on','Received on'],['reported_on','Reported on']].map(a=>'<div class="field"><label>'+a[1].toUpperCase()+'</label><input id="v_'+a[0]+'" value="'+esc(p[a[0]]||"")+'"></div>').join("")+'</div><h3 style="margin-top:22px">Report heading</h3><div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))"><div class="field"><label>DEPARTMENT</label><input id="v_department" value="'+esc(meta.department||"")+'" placeholder="e.g. Department of Clinical Pathology"></div><div class="field"><label>REPORT TITLE</label><input id="v_title" value="'+esc(meta.title||"")+'" placeholder="e.g. Report on Examination of Stool"></div></div><h3>Extracted test results</h3><p class="muted">Group each result into a section so the final PDF reads like a professional laboratory report.</p><div id="tests">'+(tests.length?tests.map((t,i)=>testRow(t,i)).join(""):'<div class="empty-tests">No test results were extracted. Add a result below if it is visible on the report.</div>')+'</div><div class="actions"><button type="button" onclick="addTest()">＋ Add test result</button><button type="button" class="danger" onclick="deleteVerification('+id+')">Delete report</button><button class="primary" onclick="approve('+id+')">Approve & generate PDF</button></div></div></div></div>')
