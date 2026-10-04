@@ -28,6 +28,7 @@ class Report(Base):
     ocr_text=Column(Text,default="")
     image_paths=Column(Text,default="[]")
     image_hashes=Column(Text,default="[]")
+    duplicate_key=Column(String,index=True,default="")
     pdf_path=Column(String,default="")
     charge=Column(Float,default=0)
     payment=Column(String,default="NOT_REQUIRED")
