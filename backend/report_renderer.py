@@ -528,12 +528,70 @@ def _result_mode(rows):
     for wanted in ("narrative", "special", "quantitative", "observation", "qualitative"):
         if wanted in explicit:
             return wanted
-
-    # Do not force every report into a four-column pathology table.
-    # A unit/reference pair is a strong signal that the result is quantitative.
     if any(str(r.get("unit") or "").strip() or str(r.get("reference_range") or "").strip() for r in rows or []):
         return "quantitative"
     return "observation"
+
+
+NARRATIVE_NOTE_NAMES = {
+    "impression", "interpretation", "conclusion", "comment", "comments",
+    "advice", "remark", "remarks", "note", "notes",
+    "recommendation", "recommendations", "clinical correlation",
+}
+
+
+def _is_narrative_note(row):
+    """Identify report-level narrative notes that should not become table rows."""
+    if str(row.get("result_type") or "").strip().lower() == "narrative":
+        return True
+    name = " ".join(str(row.get("name") or "").strip().lower().split())
+    return name in NARRATIVE_NOTE_NAMES
+
+
+def _extract_narrative_notes(tests):
+    """Split narrative notes from normal clinical result rows."""
+    normal = []
+    notes = []
+    for row in tests or []:
+        if _is_narrative_note(row):
+            value = str(row.get("value") or row.get("comment") or "").strip()
+            if value:
+                notes.append({
+                    "label": str(row.get("name") or "Interpretation").strip(),
+                    "value": value,
+                })
+        else:
+            normal.append(row)
+    return normal, notes
+
+
+def _narrative_note_block(notes, layout, styles):
+    """Render interpretation/impression-style content below result tables."""
+    if not notes:
+        return []
+    results = layout["results"]
+    text_color = _color(layout["appearance"].get("text"), colors.black)
+    font_size = float(results.get("font_size", 9)) * 0.75
+    note_style = ParagraphStyle(
+        "report_narrative_note",
+        parent=styles["table_cell"],
+        fontName=_font_name(layout),
+        fontSize=font_size,
+        leading=(font_size + 3),
+        textColor=text_color,
+        spaceAfter=4,
+    )
+    content = [Spacer(1, 4)]
+    for note in notes:
+        label = note["label"] or "Interpretation"
+        content.append(
+            Paragraph(
+                f"<b>{_safe_text(label)}</b>: {_safe_text(note['value'])}",
+                note_style,
+            )
+        )
+    content.append(Spacer(1, 6))
+    return content
 
 
 def _result_table(title, rows, layout, styles, available_width):
@@ -931,6 +989,7 @@ def _build_story(data, layout, available_width):
     story.append(Spacer(1, 11 * 0.75))
 
     tests = data.get("tests") or []
+    tests, narrative_notes = _extract_narrative_notes(tests)
     grouped_tests = _group_tests(tests, layout)
     dynamic_test_type = _dynamic_test_type(data, grouped_tests)
 
@@ -1006,7 +1065,9 @@ def _build_story(data, layout, available_width):
     for section, rows in grouped_tests:
         story.extend(_result_table(section, rows, layout, styles, available_width))
 
-    if not tests:
+    story.extend(_narrative_note_block(narrative_notes, layout, styles))
+
+    if not tests and not narrative_notes:
         story.append(
             Paragraph(
                 "No verified test results were entered.",
