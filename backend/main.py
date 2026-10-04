@@ -1,6 +1,7 @@
 import pymupdf
 import json,secrets,hmac,hashlib
 from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
 from pathlib import Path
 from fastapi import FastAPI,UploadFile,File,Form,HTTPException,Request,Depends,BackgroundTasks
 from fastapi.responses import FileResponse,HTMLResponse,Response
@@ -16,7 +17,8 @@ from .workers.whatsapp_worker import start_worker
 from .superadmin import router as superadmin_router,ensure_superadmin,setting as system_setting
 
 # OCR jobs run independently so one slow slip never blocks other slips from review.
-OCR_EXECUTOR=ThreadPoolExecutor(max_workers=4,thread_name_prefix="aarogyam-ocr")
+OCR_EXECUTOR=ThreadPoolExecutor(max_workers=8,thread_name_prefix="aarogyam-ocr")
+DUPLICATE_LOCK=Lock()
 try: import razorpay
 except Exception: razorpay=None
 Base.metadata.create_all(engine)
@@ -42,6 +44,7 @@ def migrate_legacy_sqlite():
             cols=[x[1] for x in conn.execute(text("PRAGMA table_info(reports)"))]
             if "image_hashes" not in cols: conn.execute(text("ALTER TABLE reports ADD COLUMN image_hashes TEXT DEFAULT '[]'"))
             if "token" not in cols: conn.execute(text("ALTER TABLE reports ADD COLUMN token VARCHAR"))
+            if "duplicate_key" not in cols: conn.execute(text("ALTER TABLE reports ADD COLUMN duplicate_key VARCHAR DEFAULT ''"))
         if "wa_jobs" in tables:
             cols=[x[1] for x in conn.execute(text("PRAGMA table_info(wa_jobs)"))]
             if "attempt_count" not in cols: conn.execute(text("ALTER TABLE wa_jobs ADD COLUMN attempt_count INTEGER DEFAULT 0"))
