@@ -48,6 +48,7 @@ async function startRecharge(quantity){
   }catch(e){if(status)status.innerHTML='<span>!</span><div><b>Recharge could not start</b><small>'+esc(e.message)+'</small></div>';alert(e.message)}
 }
 let intakeFiles=[];
+let pendingPollTimer=null;
 function capture(){currentPage="capture";intakeFiles=[];app.innerHTML=shell('<div class="wrap"><div class="page-head"><div><div class="eyebrow">Report intake</div><h1>New report</h1><p>Take photos, scanned PDFs or choose existing laboratory documents. You can collect several slips before starting AI extraction.</p></div></div><div class="card"><div class="upload-zone"><div class="upload-icon">▣</div><h3>Capture diagnostic report</h3><p class="muted">Use the centre phone camera for a fresh slip, or choose images/PDF reports from the gallery.</p><div class="capture-actions"><button type="button" class="primary" onclick="openCamera()">📷 Take Photo</button><button type="button" onclick="openGallery()">📁 Choose from Gallery</button></div><input id="cameraInput" type="file" accept="image/*" capture="environment" hidden onchange="addCameraFile(this.files[0]);this.value="""><input id="imgs" type="file" accept="image/*,.pdf,application/pdf" multiple hidden onchange="addGalleryFiles(this.files)"><div id="selectedFiles" class="selected-files" aria-live="polite">No images selected yet.</div><div id="selectedFileList" class="selected-file-list"></div><button id="uploadStartBtn" class="primary" onclick="upload()" disabled>Upload & start OCR</button><div id="uploadStatus" class="upload-status" role="status" aria-live="polite"><span class="upload-ready">✓</span><div><b>Ready</b><small>Add one or more laboratory documents. Cloudflare AI starts after you tap Upload & start OCR.</small></div></div></div><p class="footer-note">OCR is draft data. A technician reviews and approves every report before it is finalized.</p></div></div>')}
 function openCamera(){document.getElementById("cameraInput")?.click()}
 function openGallery(){document.getElementById("imgs")?.click()}
@@ -92,13 +93,15 @@ async function upload(){
   }
 }
 async function pending(){
+  if(pendingPollTimer){clearTimeout(pendingPollTimer);pendingPollTimer=null;}
   currentPage="pending";
   const r=await api("/api/reports");
   const jobs=r.filter(x=>["OCR_PROCESSING","OCR_REVIEW"].includes(String(x.status||"").toUpperCase()));
   app.innerHTML=shell('<div class="wrap"><div class="page-head"><div><div class="eyebrow">Technician queue</div><h1>Pending verification</h1><p>Upload many slips first, then review them here as OCR finishes.</p></div><div class="actions"><button class="primary" onclick="capture()">＋ Upload more</button></div></div><div class="card"><div id="pendingList">'+pendingRows(jobs)+'</div></div></div>');
-  if(jobs.some(x=>String(x.status||"").toUpperCase()==="OCR_PROCESSING"))setTimeout(pending,1600);
+  if(jobs.some(x=>String(x.status||"").toUpperCase()==="OCR_PROCESSING"))pendingPollTimer=setTimeout(pending,1600);
 }
 async function verifyJob(id){
+  if(pendingPollTimer){clearTimeout(pendingPollTimer);pendingPollTimer=null;}
   try{
     const r=await api("/api/reports");
     const x=r.find(v=>v.id===id);
