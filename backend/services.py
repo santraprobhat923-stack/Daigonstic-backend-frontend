@@ -129,8 +129,8 @@ def _patient_fields(readings):
     fields={k:[] for k in ("name","age","sex","phone","code","uhid","referred_by","received_on","reported_on")}
     patterns={
       "name":[r"\bpatient\s*(?:name|nm)?\s*[:#=-]?\s*(.+)$",r"^name\s*[:#=-]?\s*(.+)$",r"^patient\s+([A-Za-z][A-Za-z .,'-]{1,80})$"],
-      "age":[r"\bage\s*[/,:#=-]?\s*(\d{1,3})(?:\s*(?:years?|yrs?))?\b"],
-      "sex":[r"\b(?:sex|gender)\s*[/,:#=-]?\s*(male|female|m|f)\b"],
+      "age":[r"\bage\s*[/,:#=-]?\s*(\d{1,3})(?:\s*(?:years?|yrs?))?\b",r"\bage\s*/\s*(?:sex|gender)?\s*[-:=]?\s*(\d{1,3})\s*/\s*(?:male|female|m|f)\b"],
+      "sex":[r"\b(?:sex|gender)\s*[/,:#=-]?\s*(male|female|m|f)\b",r"\bage\s*/\s*(?:sex|gender)?\s*[-:=]?\s*\d{1,3}\s*/\s*(male|female|m|f)\b"],
       "phone":[r"\b(?:phone|mobile|mob|contact|whatsapp)\s*(?:no\.?|number)?\s*[:#=-]?\s*(\+?\d[\d\s().-]{8,})"],
       "code":[r"\b(?:patient\s*(?:id|code|no\.?)|sample\s*(?:id|no\.?|number)|specimen\s*(?:id|no\.?|number)|accession\s*(?:id|no\.?|number)|lab\s*(?:id|no\.?)|id)\s*[:#=-]?\s*([A-Za-z0-9_./-]{2,})\b"],
       "uhid":[r"\b(?:uhid|uhid\s*no\.?)\s*[:#=-]?\s*([A-Za-z0-9_./-]{2,})\b"],
@@ -152,6 +152,12 @@ def _patient_fields(readings):
                     v=_clean_line(m.group(1))
                     if v and len(v)<120: fields[key].append(v)
         # Handle a label occupying one OCR line and its value the next line.
+        # Common notebook/handwritten shorthand: "Age/Sex - 45/M" or "Age/Sex: 45/F".
+        combined=re.search(r"\bage\s*/\s*(?:sex|gender)?\s*[-:=]?\s*(\d{1,3})\s*/\s*(male|female|m|f)\b",line,re.I)
+        if combined:
+            fields["age"].append(combined.group(1))
+            fields["sex"].append(combined.group(2))
+
         if i+1<len(lines):
             nxt=lines[i+1]
             if re.fullmatch(r"(?:patient\s*)?(?:name|nm)\s*[:#=-]?",line,re.I) and re.fullmatch(r"[A-Za-z][A-Za-z .,'-]{1,80}",nxt):
