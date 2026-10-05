@@ -658,3 +658,90 @@ sudo systemctl restart aarogyam
 ```
 
 Then upload one real slip and confirm the Pending Verification item contains AI-extracted patient credentials and test rows before testing larger batches.
+
+
+## Latest implementation checkpoint — 5 Oct 2026
+
+The current Part 1 integration checkpoint is now documented here so future work can continue without losing the exact state.
+
+### Cloudflare OCR latency work
+
+The Cloudflare multimodal OCR adapter remains behaviourally unchanged. A temporary session-affinity experiment was tested for prompt-cache routing but made single-image OCR slower in real testing, so it was fully reverted.
+
+The current implementation keeps the previously working request path and does not intentionally pin OCR requests to a Cloudflare model instance.
+
+A separate safe preprocessing/performance improvement remains in place:
+- Multiple uploaded files can be prepared concurrently with a small bounded thread pool.
+- PDF pages can use a direct pixmap-to-JPEG path when the rendered page is already within the configured image-size limit.
+- Cloudflare HTTP connections are reused through a persistent requests session.
+- OCR prompt, model, extraction contract, normalization, abnormal-result logic and technician-verification workflow were not changed by these speed optimizations.
+
+Current Cloudflare model configuration:
+`@cf/google/gemma-4-26b-a4b-it`
+
+If OCR latency is still high, the next diagnostic step should measure preprocessing time separately from the Cloudflare request/inference time before making another optimization. Do not blindly reintroduce session affinity.
+
+### Report result rendering
+
+The PDF renderer now distinguishes descriptive/qualitative/special result sections from normal quantitative laboratory tables.
+
+For modes such as observation, qualitative and special:
+- Results are rendered as clean diagnostic text entries instead of forcing them into a four-column laboratory table.
+- Example structure: **Test Name : Result**.
+- Abnormal/critical result values remain bold/dark.
+- Normal values remain regular.
+- Quantitative laboratory results continue to use the saved report-design table configuration, including the centre's column/grid preferences.
+- Clinical impression/interpretation is kept as a separate report-level narrative field and is not forced into the result table.
+
+This is intended to support variable report types such as urine, stool, ultrasound/descriptive observations and other narrative-style investigations without hardcoding a fixed test schema.
+
+### Multi-page report protection
+
+Continuation-page handling has been tightened so page 2 and later pages do not place report content over the centre's letterhead header area.
+
+Continuation pages use the designated patient-name/ID placement defined by the saved layout while preserving the uploaded centre template as the permanent background.
+
+Patient-credential background opacity on continuation pages also respects the saved configuration, including an explicitly saved 0% opacity.
+
+### Standard Report Designer continuity
+
+The project continues to use the custom Standard Report Designer as the normal centre-facing report editor. PDFMe is not the normal workflow.
+
+The current designer/report-renderer work must preserve:
+- uploaded centre letterhead/background;
+- saved patient-block position;
+- patient field visibility and custom labels;
+- saved typography/table settings;
+- dynamic test sections;
+- clinical interpretation/impression as a separate narrative field;
+- multi-page continuation-page layout;
+- mobile/touch usability.
+
+Any future report-designer fix must first inspect the current GitHub code and must not replace working renderer/editor behaviour with a different designer architecture.
+
+### Part 1 multi-centre validation — next test cycle
+
+The next validation cycle will create several independent diagnostic centres and test the same build across tenants rather than testing only one centre.
+
+Planned test:
+1. Create multiple centres with separate logins.
+2. Confirm each centre sees only its own settings, uploads, verification jobs, reports, credits and notifications.
+3. Upload multiple images from different centres.
+4. Confirm each image becomes the correct centre-scoped OCR/verification job.
+5. Include duplicate images and confirm duplicates are reported as duplicates rather than silently hiding the event.
+6. Confirm fresh images from the same batch continue processing even when another image is a duplicate.
+7. Check Cloudflare OCR extraction quality across different document/slip formats.
+8. Check Pending Verification behaviour while multiple OCR jobs are processing.
+9. Verify/edit several reports in each centre.
+10. Generate PDFs and confirm each centre's saved report design/letterhead is isolated from every other centre.
+11. Confirm credits are deducted only for that centre's generated reports.
+12. Confirm report search, downloads, notifications and payment/WhatsApp state remain tenant-isolated.
+13. Observe OCR processing time under concurrent multi-centre uploads.
+
+The goal of this cycle is to validate **Part 1: multi-centre isolation + multi-image intake + OCR/verification stability** before adding unnecessary new features.
+
+### Development rule
+
+Whenever workflow, architecture, API, database, deployment, OCR behaviour, PDF rendering, report-design behaviour or other important implementation changes are made, update this README in the same change.
+
+The README remains the handover source of truth for future Aarogyam conversations.
