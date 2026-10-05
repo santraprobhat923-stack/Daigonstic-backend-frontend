@@ -685,9 +685,87 @@ def _result_table(title, rows, layout, styles, available_width):
         content.append(Spacer(1, 9))
         return content
 
-    # Observation/qualitative/special sections are intentionally compact.
+    # Observation/qualitative/special reports (e.g. urine, stool, USG)
+    # should not be forced into a laboratory value table. These reports often
+    # contain descriptive findings without units/reference ranges, so render
+    # them as a clean clinical text list instead.
     if mode in ("observation", "qualitative", "special"):
-        columns = ["name", "value"]
+        content = []
+        if results.get("section_headers", True):
+            section_bg = _color(
+                results.get("section_background"),
+                colors.HexColor("#ECEAFB"),
+            )
+            section_style = ParagraphStyle(
+                "section_observation",
+                parent=styles["section"],
+                fontName=_styled_font(
+                    layout,
+                    results.get(
+                        "section_style",
+                        "bold" if results.get("section_bold", True) else "normal",
+                    ),
+                ),
+                fontSize=float(results.get("section_font_size", 7.9)) * 0.75,
+                leading=(float(results.get("section_font_size", 7.9)) + 1) * 0.75,
+                textColor=_color(results.get("section_text"), colors.black),
+                alignment=_alignment(results.get("section_align", "left")),
+            )
+            pad = max(2, float(results.get("section_padding", 5))) * 0.75
+            content.append(
+                Table(
+                    [[Paragraph(_safe_text(str(title).upper()), section_style)]],
+                    colWidths=[available_width],
+                    hAlign="LEFT",
+                    style=TableStyle([
+                        ("BACKGROUND", (0, 0), (-1, -1), section_bg),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 8 * 0.75),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 8 * 0.75),
+                        ("TOPPADDING", (0, 0), (-1, -1), pad),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), pad),
+                    ]),
+                )
+            )
+            content.append(Spacer(1, 5 * 0.75))
+
+        clinical_style = ParagraphStyle(
+            "observation_result",
+            parent=text_style,
+            fontName=_font_name(layout),
+            fontSize=float(results.get("font_size", 9)) * 0.75,
+            leading=(float(results.get("font_size", 9)) + 3) * 0.75,
+            spaceAfter=4 * 0.75,
+        )
+        for row in rows:
+            name = str(row.get("name") or "").strip()
+            value = str(row.get("value") or row.get("comment") or "").strip()
+            if not value:
+                continue
+            if name:
+                value_markup = (
+                    f"<b>{_safe_text(value)}</b>"
+                    if _is_critical_result(row)
+                    else _safe_text(value)
+                )
+                content.append(
+                    Paragraph(
+                        f"<b>{_safe_text(name)}</b> : {value_markup}",
+                        clinical_style,
+                    )
+                )
+            else:
+                content.append(
+                    Paragraph(
+                        (
+                            f"<b>{_safe_text(value)}</b>"
+                            if _is_critical_result(row)
+                            else _safe_text(value)
+                        ),
+                        clinical_style,
+                    )
+                )
+        content.append(Spacer(1, 7))
+        return content
     else:
         # Quantitative results retain the designer's selected columns.
         columns = [
