@@ -27,10 +27,17 @@ PATIENT DEMOGRAPHICS — SEMANTIC UNDERSTANDING:
 - Never put a date, date of birth, received date, reported date, or year into the age field.
 - Never infer age or gender from the patient's name, diagnosis, test values, or unrelated information.
 - Do not invent a demographic value merely because the schema has a field for it.
-report: department, title, test_type.
+report: department, title, test_type, interpretation, impression.
 result_sections: an array of sections. Each section has section and items. Each item has name and value, with optional unit, reference_range, flag, method, comment, result_type.
 
 Use result_type as quantitative, qualitative, observation, narrative or special when the document clearly supports that interpretation. Unit and reference_range are OPTIONAL and must be empty/omitted when not visible. Never discard a clinically relevant result because it has no unit or reference range. Preserve Positive/Negative/Reactive/Nil/Present/Absent, descriptive observations, culture organisms/sensitivity, blood group, and narrative findings. For narrative reports, preserve the meaningful text under an appropriate item/section rather than inventing a numeric result.
+
+CLINICAL INTERPRETATION / IMPRESSION:
+- Carefully look for explicit sections such as Impression, Interpretation, Conclusion, Opinion, Comment, Clinical Correlation, Summary, Findings/Impression, or similar wording.
+- Preserve the clinically meaningful visible text of these sections separately as report.interpretation and/or report.impression.
+- Do not manufacture a clinical interpretation from the test values. If the document has no explicit interpretation/impression, leave these fields empty.
+- If an interpretation or impression is handwritten, extract it when legible.
+- A technician may manually enter or edit these fields later, so do not discard partial but clearly visible text.
 
 Reference ranges must come from the document, never medical knowledge. Extract every visible clinically relevant result, BUT EXCLUDE NON-CLINICAL OPERATIONAL/MACHINE METADATA. Never return analyzer operational lines such as CALIBRATION STATUS, CALIBRATION, QC, QUALITY CONTROL, reagent lot/batch/expiry information, cuvette lot/batch information, cartridge/kit lot numbers, machine/instrument/device status, maintenance/service messages, printer/device diagnostics, internal run IDs, barcode/QR text, rack/position/cuvette identifiers, or similar instrument-control text. A line is not a clinical result merely because it contains a number. Only return a test parameter when it represents a patient clinical measurement, qualitative observation, or narrative clinical finding. Preserve questionable clinical digits rather than guessing. Unknown or uncommon clinical tests must be returned exactly as seen; do not reject them because they are absent from any reference list."""
 def _img(img):
@@ -195,7 +202,7 @@ def normalize(data):
         },
         "tests":tests,
         "result_sections":result_sections,
-        "report":{"department":_clean(h.get("department")),"title":_clean(h.get("title")),"test_type":_clean(h.get("test_type"))},
+        "report":{"department":_clean(h.get("department")),"title":_clean(h.get("title")),"test_type":_clean(h.get("test_type")),"interpretation":_clean(h.get("interpretation")),"impression":_clean(h.get("impression"))},
         "extraction_engine":"cloudflare_workers_ai",
         "ai_schema_version":"2.0"
     }
@@ -203,7 +210,7 @@ def normalize(data):
 def extract_with_cloudflare(paths):
     if not CLOUDFLARE_ACCOUNT_ID or not CLOUDFLARE_API_TOKEN:
         raise RuntimeError("Cloudflare AI is not configured. Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN.")
-    body={"messages":[{"role":"system","content":SYSTEM},{"role":"user","content":[{"type":"text","text":"Understand the supplied clinical image/document semantically and extract the complete visible clinical information into the requested JSON. Do not depend on fixed labels, fixed positions, regex-like patterns, or a particular centre's formatting. Patient demographics may use unfamiliar printed or handwritten conventions; determine their meaning from visual context and surrounding fields. The source may be any image, screenshot, photograph, scanned/printed report, analyzer display, WhatsApp image, or PDF page. Combine all supplied pages/images when there are multiple inputs. Do not invent missing data."}]+_parts(paths)}],"temperature":0,"max_tokens":6000,"chat_template_kwargs":{"enable_thinking":False}}
+    body={"messages":[{"role":"system","content":SYSTEM},{"role":"user","content":[{"type":"text","text":"First understand what kind of clinical document this is and what information is actually present. Then extract the complete visible clinical information into the requested JSON. Identify the broad test/report type before extracting its parameters. For example, recognize whether the document represents LFT, KFT, lipid profile, thyroid, CBC, urine/stool examination, microbiology, pathology, radiology, a single analyzer parameter, or another clinical test based on its visible structure and terminology. Do not force an image into a predefined test category if it does not fit. Then extract the patient credentials, followed by the clinically meaningful test parameters grouped under the appropriate section/test type, and finally any explicit interpretation/impression. Do not depend on fixed labels, fixed positions, regex-like patterns, or a particular centre formatting. Do not depend on fixed labels, fixed positions, regex-like patterns, or a particular centre's formatting. Patient demographics may use unfamiliar printed or handwritten conventions; determine their meaning from visual context and surrounding fields. The source may be any image, screenshot, photograph, scanned/printed report, analyzer display, WhatsApp image, or PDF page. Combine all supplied pages/images when there are multiple inputs. Do not invent missing data."}]+_parts(paths)}],"temperature":0,"max_tokens":6000,"chat_template_kwargs":{"enable_thinking":False}}
     r=requests.post(URL.format(CLOUDFLARE_ACCOUNT_ID,CLOUDFLARE_AI_MODEL),headers={"Authorization":"Bearer "+CLOUDFLARE_API_TOKEN,"Content-Type":"application/json","User-Agent":"Aarogyam/1.0"},json=body,timeout=CLOUDFLARE_AI_TIMEOUT)
     if r.status_code>=400: raise RuntimeError("Cloudflare AI request failed ("+str(r.status_code)+"): "+r.text[:600])
     payload=r.json()
