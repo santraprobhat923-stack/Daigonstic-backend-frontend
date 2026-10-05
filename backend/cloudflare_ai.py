@@ -1,4 +1,5 @@
 import base64,json,re
+from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from pathlib import Path
 import requests
@@ -8,6 +9,7 @@ except Exception: pymupdf=None
 from .config import CLOUDFLARE_ACCOUNT_ID,CLOUDFLARE_API_TOKEN,CLOUDFLARE_AI_MODEL,CLOUDFLARE_AI_TIMEOUT
 
 URL="https://api.cloudflare.com/client/v4/accounts/{}/ai/run/{}"
+HTTP_SESSION=requests.Session()
 REFERENCE_FILE=Path(__file__).resolve().parent/"data"/"medical_tests.json"
 
 SYSTEM="""You are Aarogyam clinical document understanding AI. Your primary task is to understand the visual information in the supplied image/document, regardless of its source or format. It may be a laboratory slip, analyzer display photo, computer-screen screenshot, WhatsApp screenshot, photograph of a printed report, scanned report, handwritten report, PDF page, pathology/histopathology report, microbiology report, urine/stool examination, blood grouping document, referral note, or another clinical report. Do not classify the source before extracting it; understand the actual visible data and its meaning. Extract only what is visible; never invent credentials, values, units, reference ranges, methods or comments. Understand tables, columns, labels, handwriting, screenshots, photographs, mixed layouts and narrative paragraphs.
@@ -46,22 +48,39 @@ def _img(img):
         s=m/max(img.size); img=img.resize((max(1,int(img.width*s)),max(1,int(img.height*s))),Image.Resampling.LANCZOS)
     b=BytesIO(); img.save(b,"JPEG",quality=84,optimize=True)
     return {"type":"image_url","image_url":{"url":"data:image/jpeg;base64,"+base64.b64encode(b.getvalue()).decode()}}
+def _pdf_part(page):
+    pix=page.get_pixmap(matrix=pymupdf.Matrix(1.7,1.7),alpha=False)
+    if max(pix.width,pix.height)<=1800:
+        raw=pix.tobytes("jpeg",jpg_quality=84)
+        return {"type":"image_url","image_url":{"url":"data:image/jpeg;base64,"+base64.b64encode(raw).decode()}}
+    with Image.open(BytesIO(pix.tobytes("png"))) as im:
+        return _img(im)
+
+def _parts_one(path):
+    p=Path(path); ext=p.suffix.lower()
+    if ext==".pdf":
+        if not pymupdf: raise RuntimeError("PyMuPDF is required for PDF extraction")
+        out=[]
+        d=pymupdf.open(path)
+        try:
+            for i,page in enumerate(d):
+                if i>=8: break
+                out.append(_pdf_part(page))
+        finally: d.close()
+        return out
+    if ext in {".jpg",".jpeg",".png",".webp",".bmp",".tif",".tiff"}:
+        with Image.open(path) as im: return [_img(im)]
+    raise ValueError("Unsupported document type. Upload an image or PDF.")
+
 def _parts(paths):
-    out=[]
-    for path in paths:
-        p=Path(path); ext=p.suffix.lower()
-        if ext==".pdf":
-            if not pymupdf: raise RuntimeError("PyMuPDF is required for PDF extraction")
-            d=pymupdf.open(path)
-            try:
-                for i,page in enumerate(d):
-                    if i>=8: break
-                    pix=page.get_pixmap(matrix=pymupdf.Matrix(1.7,1.7),alpha=False)
-                    out.append(_img(Image.open(BytesIO(pix.tobytes("png")))))
-            finally: d.close()
-        elif ext in {".jpg",".jpeg",".png",".webp",".bmp",".tif",".tiff"}:
-            with Image.open(path) as im: out.append(_img(im))
-        else: raise ValueError("Unsupported document type. Upload an image or PDF.")
+    paths=list(paths)
+    if len(paths)<=1:
+        return _parts_one(paths[0]) if paths else []
+    workers=min(2,len(paths))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        batches=pool.map(_parts_one,paths)
+        out=[]
+        for batch in batches: out.extend(batch)
     return out
 def _json(payload):
     r=payload.get("result") or {}; raw=""
@@ -211,7 +230,7 @@ def extract_with_cloudflare(paths):
     if not CLOUDFLARE_ACCOUNT_ID or not CLOUDFLARE_API_TOKEN:
         raise RuntimeError("Cloudflare AI is not configured. Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN.")
     body={"messages":[{"role":"system","content":SYSTEM},{"role":"user","content":[{"type":"text","text":"First understand what kind of clinical document this is and what information is actually present. Then extract the complete visible clinical information into the requested JSON. Identify the broad test/report type before extracting its parameters. For example, recognize whether the document represents LFT, KFT, lipid profile, thyroid, CBC, urine/stool examination, microbiology, pathology, radiology, a single analyzer parameter, or another clinical test based on its visible structure and terminology. Do not force an image into a predefined test category if it does not fit. Then extract the patient credentials, followed by the clinically meaningful test parameters grouped under the appropriate section/test type, and finally any explicit interpretation/impression. Do not depend on fixed labels, fixed positions, regex-like patterns, or a particular centre formatting. Do not depend on fixed labels, fixed positions, regex-like patterns, or a particular centre's formatting. Patient demographics may use unfamiliar printed or handwritten conventions; determine their meaning from visual context and surrounding fields. The source may be any image, screenshot, photograph, scanned/printed report, analyzer display, WhatsApp image, or PDF page. Combine all supplied pages/images when there are multiple inputs. Do not invent missing data."}]+_parts(paths)}],"temperature":0,"max_tokens":6000,"chat_template_kwargs":{"enable_thinking":False}}
-    r=requests.post(URL.format(CLOUDFLARE_ACCOUNT_ID,CLOUDFLARE_AI_MODEL),headers={"Authorization":"Bearer "+CLOUDFLARE_API_TOKEN,"Content-Type":"application/json","User-Agent":"Aarogyam/1.0"},json=body,timeout=CLOUDFLARE_AI_TIMEOUT)
+    r=HTTP_SESSION.post(URL.format(CLOUDFLARE_ACCOUNT_ID,CLOUDFLARE_AI_MODEL),headers={"Authorization":"Bearer "+CLOUDFLARE_API_TOKEN,"Content-Type":"application/json","User-Agent":"Aarogyam/1.0"},json=body,timeout=CLOUDFLARE_AI_TIMEOUT)
     if r.status_code>=400: raise RuntimeError("Cloudflare AI request failed ("+str(r.status_code)+"): "+r.text[:600])
     payload=r.json()
     if not payload.get("success",True): raise RuntimeError("Cloudflare AI request failed: "+str(payload.get("errors")))
