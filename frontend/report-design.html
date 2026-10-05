@@ -185,11 +185,6 @@ textarea{resize:vertical;min-height:60px}
    <div><label>Report title style</label><select id="reportTitleStyle"><option value="bold">Bold</option><option value="normal">Normal</option><option value="italic">Italic</option><option value="bold_italic">Bold Italic</option></select></div>
    <div><label>Report title color</label><input id="reportTitleColor" type="color" value="#151A2D"></div>
    <div><label>Report title line color</label><input id="reportTitleLineColor" type="color" value="#5F52E8"></div>
-   <div><label>Section Font Size</label><input id="sectionSize" type="number" min="7" max="18" step=".5" value="8"></div>
-   <div><label>Section alignment</label><select id="sectionAlign"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></div>
-   <div><label>Section style</label><select id="sectionStyle"><option value="bold">Bold</option><option value="normal">Normal</option><option value="italic">Italic</option><option value="bold_italic">Bold Italic</option></select></div>
-   <div><label>Section font color</label><input id="sectionColor" type="color" value="#151A2D"></div>
-   <div><label>Section background</label><input id="sectionBg" type="color" value="#ECEAFB"></div>
   </div>
 
   <div class="grid">
@@ -216,7 +211,6 @@ textarea{resize:vertical;min-height:60px}
   <div class="checks" style="margin-top:10px">
    <label><input id="showReference" type="checkbox" checked> Reference Range</label>
    <label><input id="showUnit" type="checkbox" checked> Unit</label>
-   <label><input id="boldSections" type="checkbox" checked> Bold Sections</label>
    <label><input id="gridStyle" type="checkbox"> Full Table Grid</label>
   </div>
  </div>
@@ -277,8 +271,6 @@ textarea{resize:vertical;min-height:60px}
 
     <div class="report-flow" id="reportFlow">
      <div class="report-title" id="reportTitleBlock">LABORATORY REPORT</div>
-
-     <div class="section" id="reportSectionBlock">EXAMINATION RESULTS</div>
 
      <div class="table">
      <div class="tr th">
