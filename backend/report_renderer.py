@@ -953,6 +953,7 @@ class _ReportDocTemplate(BaseDocTemplate):
                 id="report_first",
                 frames=[first_frame],
                 onPage=self._draw_secondary_patient,
+                autoNextPageTemplate="report_continuation",
             ),
             PageTemplate(
                 id="report_continuation",
