@@ -1,5 +1,5 @@
 import pymupdf
-import json,secrets,hmac,hashlib,tempfile,shutil,subprocess
+import json,secrets,hmac,hashlib,tempfile,shutil,subprocess,logging,traceback
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 from pathlib import Path
@@ -19,6 +19,7 @@ from .superadmin import router as superadmin_router,ensure_superadmin,setting as
 # OCR jobs run independently so one slow slip never blocks other slips from review.
 OCR_EXECUTOR=ThreadPoolExecutor(max_workers=8,thread_name_prefix="aarogyam-ocr")
 DUPLICATE_LOCK=Lock()
+logger=logging.getLogger("aarogyam.ocr")
 try: import razorpay
 except Exception: razorpay=None
 Base.metadata.create_all(engine)
@@ -209,11 +210,41 @@ def _clinical_duplicate_key(data):
     payload=json.dumps({"patient":identity,"tests":sorted(tests)},ensure_ascii=False,separators=(",",":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
-def process_ocr(report_id, centre_id, paths):
+def _mark_ocr_error(report_id, centre_id, message):
     db=SessionLocal()
     try:
         r=db.get(Report,report_id)
         if not r or r.centre_id!=centre_id:
+            return
+        r.status="OCR_ERROR"
+        r.ocr_text=(r.ocr_text or "") + f"\\nOCR ERROR: {message}"
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("OCR job %s could not be marked OCR_ERROR", report_id)
+    finally:
+        db.close()
+
+def _ocr_done(report_id, future):
+    try:
+        exc=future.exception()
+    except Exception as e:
+        logger.exception("OCR job %s completion check failed: %s", report_id, e)
+        return
+    if exc:
+        logger.error("OCR worker crashed for report %s: %s", report_id, exc, exc_info=(type(exc), exc, exc.__traceback__))
+        try:
+            _mark_ocr_error(report_id, None, str(exc))
+        except Exception:
+            logger.exception("OCR worker crash handler failed for report %s", report_id)
+
+def process_ocr(report_id, centre_id, paths):
+    logger.info("OCR job %s START centre=%s files=%s", report_id, centre_id, len(paths))
+    db=SessionLocal()
+    try:
+        r=db.get(Report,report_id)
+        if not r or r.centre_id!=centre_id:
+            logger.warning("OCR job %s skipped: report missing or centre mismatch", report_id)
             return
     finally:
         db.close()
@@ -221,7 +252,10 @@ def process_ocr(report_id, centre_id, paths):
     merged={"patient":{},"tests":[],"report":{}}; texts=[]; errors=[]
     for raw_path in paths:
         try:
-            t,d=extract(raw_path); texts.append(t)
+            logger.info("OCR job %s extracting %s", report_id, Path(raw_path).name)
+            t,d=extract(raw_path)
+            logger.info("OCR job %s extraction complete %s tests=%s", report_id, Path(raw_path).name, len(d.get("tests") or []))
+            texts.append(t)
             for k,v in d["patient"].items():
                 if v and not merged["patient"].get(k):
                     merged["patient"][k]=v
@@ -230,13 +264,19 @@ def process_ocr(report_id, centre_id, paths):
                 if v and not merged["report"].get(k):
                     merged["report"][k]=v
         except Exception as e:
+            logger.error("OCR job %s extraction failed for %s: %s", report_id, Path(raw_path).name, e, exc_info=True)
             errors.append(f"OCR failed for {Path(raw_path).name}: {e}")
 
+    if not texts and not merged["tests"] and errors:
+        raise RuntimeError(errors[0])
+
     duplicate_key=_clinical_duplicate_key(merged)
+    logger.info("OCR job %s normalized duplicate_key=%s", report_id, bool(duplicate_key))
     db=SessionLocal()
     try:
         r=db.get(Report,report_id)
         if not r or r.centre_id!=centre_id:
+            logger.warning("OCR job %s save skipped: report missing or centre mismatch", report_id)
             return
         with DUPLICATE_LOCK:
             duplicate=None
@@ -253,12 +293,13 @@ def process_ocr(report_id, centre_id, paths):
                 r.duplicate_key=duplicate_key
                 r.status="DUPLICATE"
                 db.commit()
+                logger.info("OCR job %s DUPLICATE of report %s", report_id, duplicate.id)
                 for raw_path in paths:
                     try:
                         p=Path(raw_path)
                         if p.is_file(): p.unlink()
                     except Exception:
-                        pass
+                        logger.warning("OCR job %s could not delete duplicate source %s", report_id, raw_path)
                 return
             if duplicate_key:
                 r.duplicate_key=duplicate_key
@@ -270,18 +311,14 @@ def process_ocr(report_id, centre_id, paths):
             r.status="OCR_REVIEW"
             notify(db,centre_id,report_id,"OCR_READY",f"Report #{report_id} is ready for technician verification.")
             db.commit()
-    except Exception:
+            logger.info("OCR job %s READY for technician verification", report_id)
+    except Exception as e:
         db.rollback()
-        try:
-            r=db.get(Report,report_id)
-            if r:
-                r.status="OCR_REVIEW"
-                r.ocr_text=(r.ocr_text or "") + "\nOCR processing encountered an error. Please review the image."
-                db.commit()
-        except Exception:
-            db.rollback()
+        logger.error("OCR job %s save/finalization failed: %s", report_id, e, exc_info=True)
+        raise
     finally:
         db.close()
+
 
 def awaitable_read(f):
     return f.file.read()
@@ -343,7 +380,8 @@ def upload_reports(files:list[UploadFile]=File(...),c=Depends(current),db:Sessio
         db.refresh(report)
 
         created.append(report)
-        OCR_EXECUTOR.submit(process_ocr,report.id,c.id,[str(stored)])
+        future=OCR_EXECUTOR.submit(process_ocr,report.id,c.id,[str(stored)])
+        future.add_done_callback(lambda f, rid=report.id: _ocr_done(rid, f))
 
     return {
         "uploaded_count":len(created),
