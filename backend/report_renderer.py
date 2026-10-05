@@ -85,7 +85,6 @@ DEFAULT_LAYOUT = {
         "report_title_style": "bold",
         "report_title_color": "#151A2D",
         "report_title_line_color": "#5F52E8",
-        "section_title": "EXAMINATION RESULTS",
         "section_style": "bold",
         "header_size": 7.5,
         "show_grid": False,
@@ -818,7 +817,7 @@ def _dynamic_test_type(data, grouped_tests):
         value = str(section or "").strip()
         if value and value.lower() not in generic and value.lower() != "unclassified results":
             return value.upper()
-    return "EXAMINATION RESULTS"
+    return ""
 
 
 def _group_tests(tests, layout=None):
@@ -1041,9 +1040,10 @@ def _build_story(data, layout, available_width):
         ),
         spaceAfter=5 * 0.75,
     )
-    story.append(
-        Paragraph(_safe_text(dynamic_test_type), test_type_style)
-    )
+    if dynamic_test_type:
+        story.append(
+            Paragraph(_safe_text(dynamic_test_type), test_type_style)
+        )
 
     for section, rows in grouped_tests:
         story.extend(_result_table(section, rows, layout, styles, available_width))
