@@ -332,7 +332,7 @@ def upload_reports(files:list[UploadFile]=File(...),c=Depends(current),db:Sessio
     centre_dir=STORAGE_DIR/f"centre_{c.id}"/"images"
     centre_dir.mkdir(parents=True,exist_ok=True)
     created=[]
-    duplicates=0
+    duplicates=[]
 
     for file in files:
         filename=Path(file.filename or "").name
@@ -361,7 +361,7 @@ def upload_reports(files:list[UploadFile]=File(...),c=Depends(current),db:Sessio
             existing=None
 
         if existing:
-            duplicates+=1
+            duplicates.append({"filename":filename,"existing_report_id":existing.id})
             continue
 
         stored=centre_dir/f"{secrets.token_hex(10)}_{filename or 'report'+suffix}"
@@ -385,7 +385,8 @@ def upload_reports(files:list[UploadFile]=File(...),c=Depends(current),db:Sessio
 
     return {
         "uploaded_count":len(created),
-        "duplicate_count":duplicates,
+        "duplicate_count":len(duplicates),
+        "duplicates":duplicates,
         "reports":[report_dict(r) for r in created],
         "report":report_dict(created[0]) if len(created)==1 else None,
     }
