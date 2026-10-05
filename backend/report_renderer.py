@@ -1084,31 +1084,6 @@ def _build_story(data, layout, available_width):
     tests = data.get("tests") or []
     tests, narrative_notes = _extract_narrative_notes(tests)
     grouped_tests = _group_tests(tests, layout)
-    dynamic_test_type = _dynamic_test_type(data, grouped_tests)
-
-    test_type_style = ParagraphStyle(
-        "dynamic_test_type",
-        parent=styles["department"],
-        fontName=_styled_font(
-            layout,
-            layout["results"].get("section_style", "bold"),
-        ),
-        fontSize=float(layout["results"].get("section_font_size", 8)) * 0.75,
-        leading=(float(layout["results"].get("section_font_size", 8)) + 2) * 0.75,
-        textColor=_color(
-            layout["results"].get("section_text"),
-            text_color,
-        ),
-        alignment=_alignment(
-            layout["results"].get("section_align", "left")
-        ),
-        spaceAfter=5 * 0.75,
-    )
-    if dynamic_test_type:
-        story.append(
-            Paragraph(_safe_text(dynamic_test_type), test_type_style)
-        )
-
     for section, rows in grouped_tests:
         story.extend(_result_table(section, rows, layout, styles, available_width))
 
