@@ -104,7 +104,7 @@ async function pending(force=false){
   currentPage="pending";
   const r=await api("/api/reports");
   if(generation!==pendingViewGeneration||currentPage!=="pending"||activeReviewId!==null)return;
-  const jobs=r.filter(x=>["OCR_PROCESSING","OCR_REVIEW","DUPLICATE"].includes(String(x.status||"").toUpperCase()));
+  const jobs=r.filter(x=>["OCR_PROCESSING","OCR_REVIEW","OCR_ERROR","DUPLICATE"].includes(String(x.status||"").toUpperCase()));
   app.innerHTML=shell('<div class="wrap"><div class="page-head"><div><div class="eyebrow">Technician queue</div><h1>Pending verification</h1><p>Upload many slips first, then review them here as OCR finishes.</p></div><div class="actions"><button class="primary" onclick="capture()">＋ Upload more</button></div></div><div class="card"><div id="pendingList">'+pendingRows(jobs)+'</div></div></div>');
   if(jobs.some(x=>String(x.status||"").toUpperCase()==="OCR_PROCESSING"))pendingPollTimer=setTimeout(pending,1600);
 }
@@ -139,7 +139,8 @@ function pendingRows(r){
     const status=String(x.status||"").toUpperCase();
     const processing=status==="OCR_PROCESSING";
     const duplicate=status==="DUPLICATE";
-    return '<div class="pending-item" data-report-id="'+esc(id)+'"><div class="pending-main"><span class="pending-id">#'+esc(id)+'</span><div><b>'+esc(x.patient_name||"Patient details pending OCR")+'</b><p class="muted">'+(processing?"OCR is reading the clinical document…":duplicate?"Duplicate blocked — same patient credentials and clinical results already exist.":"OCR complete · review required")+'</p></div></div><div class="pending-action">'+(processing?'<span class="badge">PROCESSING OCR</span>':duplicate?'<span class="badge">DUPLICATE BLOCKED</span>':'<button type="button" class="primary" data-review-id="'+esc(id)+'" onclick="verifyJob(this.dataset.reviewId)">Review</button>')+'</div></div>'
+    const error=status==="OCR_ERROR";
+    return '<div class="pending-item" data-report-id="'+esc(id)+'"><div class="pending-main"><span class="pending-id">#'+esc(id)+'</span><div><b>'+esc(x.patient_name||"Patient details pending OCR")+'</b><p class="muted">'+(processing?"OCR is reading the clinical document…":duplicate?"Duplicate blocked — same patient credentials and clinical results already exist.":error?"OCR failed — check server log and retry the document.":"OCR complete · review required")+'</p></div></div><div class="pending-action">'+(processing?'<span class="badge">PROCESSING OCR</span>':duplicate?'<span class="badge">DUPLICATE BLOCKED</span>':error?'<span class="badge">OCR ERROR</span>':'<button type="button" class="primary" data-review-id="'+esc(id)+'" onclick="verifyJob(this.dataset.reviewId)">Review</button>')+'</div></div>'
   }).join("")+'</div>';
 }
 
