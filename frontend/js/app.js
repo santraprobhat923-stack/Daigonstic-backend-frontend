@@ -112,11 +112,11 @@ async function upload(){
 async function pending(force=false,background=false){
   // Background polling must never interrupt an active technician review.
   // Polling refreshes only the queue contents, not the entire application shell.
-  if(activeReviewId!==null)return;
+  if(activeReviewId!==null&&!force)return;
+  if(force)activeReviewId=null;
   if(pendingPollTimer){clearTimeout(pendingPollTimer);pendingPollTimer=null;}
   const generation=++pendingViewGeneration;
   if(!background){
-    if(force)activeReviewId=null;
     currentPage="pending";
   }
   const r=await api("/api/reports");
