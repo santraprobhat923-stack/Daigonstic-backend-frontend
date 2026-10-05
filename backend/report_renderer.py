@@ -915,56 +915,161 @@ class _PageCountCanvas(canvas.Canvas):
 
 
 class _ReportDocTemplate(BaseDocTemplate):
+    """
+    ReportLab document with a dedicated continuation-page frame.
+
+    Page 1 keeps the original designer body frame. Page 2+ gets a separate
+    frame whose top edge is calculated from the saved patient X/Y position
+    and the compact continuation identity block. This prevents flowing
+    result tables from entering the letterhead/patient header area.
+    """
     def __init__(self, stream, layout, patient=None, **kwargs):
         self._layout = layout
         self._patient = patient or {}
+        self._pagesize = _page_size(layout)
+
         left, right, top, bottom = _metrics(layout)
-        frame = Frame(
-            left, bottom, _page_size(layout)[0] - left - right, top - bottom,
-            id="report_body", leftPadding=0, rightPadding=0,
+        body_width = self._pagesize[0] - left - right
+
+        # First page: preserve the existing saved page geometry exactly.
+        first_frame = Frame(
+            left, bottom, body_width, top - bottom,
+            id="report_body_first", leftPadding=0, rightPadding=0,
             topPadding=0, bottomPadding=0,
         )
-        self._pagesize = _page_size(layout)
+
+        # Continuation pages: reserve the compact patient identity at the
+        # exact saved patient position before allowing any flow content.
+        continuation_top = self._continuation_frame_top()
+        continuation_frame = Frame(
+            left, bottom, body_width, max(1.0, continuation_top - bottom),
+            id="report_body_continuation", leftPadding=0, rightPadding=0,
+            topPadding=0, bottomPadding=0,
+        )
+
         super().__init__(stream, pagesize=self._pagesize, **kwargs)
         self.addPageTemplates([
-            PageTemplate(id="report", frames=[frame], onPage=self._draw_secondary_patient)
+            PageTemplate(
+                id="report_first",
+                frames=[first_frame],
+                onPage=self._draw_secondary_patient,
+            ),
+            PageTemplate(
+                id="report_continuation",
+                frames=[continuation_frame],
+                onPage=self._draw_secondary_patient,
+            ),
         ])
 
-    def _draw_secondary_patient(self, canv, doc):
-        """Draw only compact patient identity on overflow pages."""
-        if canv.getPageNumber() <= 1:
-            return
+    def _continuation_geometry(self):
+        """Return continuation patient x/y, width and compact block height."""
         page_w, page_h = self._pagesize
         page = self._layout.get("page") or {}
-        top = max(0.0, float(page.get("top", 132) or 0))
+        patient = self._layout.get("patient") or {}
         left = max(0.0, float(page.get("left", 52) or 0))
         right = max(0.0, float(page.get("right", 52) or 0))
-        if top < 42:
+        frame_top = page_h - max(0.0, float(page.get("top", 132) or 0))
+
+        position = patient.get("position") or {}
+        px_to_pt = 72.0 / 96.0
+        x = float(position.get("x", 0) or 0) * px_to_pt
+        y = float(position.get("y", 0) or 0) * px_to_pt
+
+        # Continuation identity intentionally uses only patient name + ID.
+        # Keep its width aligned with the saved patient block width setting.
+        available_width = page_w - left - right
+        width_percent = float(patient.get("width_percent", 100) or 100)
+        width = available_width * width_percent / 100.0
+
+        font_size = float(patient.get("font_size", 8.5) or 8.5) * 0.75
+        line_height = max(10.0, font_size * 1.25)
+        box_height = max(22.0, line_height + 12.0)
+
+        # A configured fixed patient height is authoritative; otherwise use
+        # the compact two-field continuation height.
+        configured_height = float(patient.get("height", 0) or 0)
+        if configured_height > 0:
+            box_height = max(box_height, configured_height * 0.75)
+
+        return left, right, frame_top, x, y, width, box_height
+
+    def _continuation_frame_top(self):
+        """
+        Put all continuation flow content below the compact patient identity.
+
+        The extra gap is deliberate: it keeps table headers/rows and narrative
+        content visually separated from the patient identity and letterhead.
+        """
+        _left, _right, frame_top, _x, y, _width, box_height = self._continuation_geometry()
+        gap = 8.0
+        return max(0.0, frame_top - y - box_height - gap)
+
+    def _draw_secondary_patient(self, canv, doc):
+        """On page 2+, draw only the configured patient name and ID."""
+        if canv.getPageNumber() <= 1:
             return
+
+        page_w, _page_h = self._pagesize
+        patient_cfg = self._layout.get("patient") or {}
         patient = self._patient
+
         name = str(patient.get("name") or "").strip()
         code = str(patient.get("code") or patient.get("patient_id") or "").strip()
-        uhid = str(patient.get("uhid") or "").strip()
-        identity = "  •  ".join(x for x in (
-            f"Patient: {name}" if name else "",
-            f"ID: {code}" if code else "",
-            f"UHID: {uhid}" if uhid else "",
-        ) if x)
+        if not name and not code:
+            return
+
+        left, _right, frame_top, x, y, width, box_height = self._continuation_geometry()
+
+        labels = patient_cfg.get("labels") or {}
+        name_label = str(labels.get("name") or FIELD_LABELS["name"]).strip()
+        code_label = str(labels.get("code") or FIELD_LABELS["code"]).strip()
+
+        parts = []
+        if name:
+            parts.append(f"{name_label}: {name}")
+        if code:
+            parts.append(f"{code_label}: {code}")
+        identity = "  •  ".join(parts)
         if not identity:
             return
-        text = _color(self._layout.get("appearance", {}).get("text"), colors.HexColor("#151A2D"))
-        border = _color((self._layout.get("patient") or {}).get("border"), colors.HexColor("#E2E5EC"))
-        bg = _color_opacity((self._layout.get("patient") or {}).get("background"), 88, colors.HexColor("#F5F6F8"))
-        frame_top = page_h - top
-        box_h = 24
-        box_y = frame_top + 5
+
+        text = _color(
+            self._layout.get("appearance", {}).get("text"),
+            colors.HexColor("#151A2D"),
+        )
+        border = _color(
+            patient_cfg.get("border"),
+            colors.HexColor("#E2E5EC"),
+        )
+        bg = _color_opacity(
+            patient_cfg.get("background"),
+            min(100, float(patient_cfg.get("background_opacity", 88) or 88)),
+            colors.HexColor("#F5F6F8"),
+        )
+
+        # x/y are the same saved designer coordinates used by the full
+        # patient block on page 1.
+        box_x = left + x
+        box_y = frame_top - y - box_height
+
+        # Never allow the continuation identity to escape the configured
+        # page margins. The flow frame below is independently constrained.
+        max_width = max(1.0, page_w - box_x - max(0.0, float(_right)))
+        draw_width = min(width, max_width)
+
         canv.saveState()
-        canv.setFillColor(bg)
-        canv.setStrokeColor(border)
-        canv.roundRect(left, box_y, page_w - left - right, box_h, 3, fill=1, stroke=1)
+        if patient_cfg.get("style", "card") != "plain":
+            canv.setFillColor(bg)
+            canv.setStrokeColor(border)
+            canv.roundRect(box_x, box_y, draw_width, box_height, 3, fill=1, stroke=1)
+
         canv.setFillColor(text)
-        canv.setFont(_font_name(self._layout, bold=True), 7.5)
-        canv.drawString(left + 8, box_y + 14, identity[:180])
+        font_size = max(6.5, min(12.0, float(patient_cfg.get("font_size", 8.5) or 8.5) * 0.75))
+        canv.setFont(_font_name(self._layout, bold=True), font_size)
+
+        text_x = box_x + (10 * 0.75 if patient_cfg.get("style", "card") != "plain" else 0)
+        text_y = box_y + box_height - font_size - 3
+        canv.drawString(text_x, text_y, identity[:240])
         canv.restoreState()
 
 def _build_story(data, layout, available_width):
