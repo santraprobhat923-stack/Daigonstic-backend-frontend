@@ -14,6 +14,17 @@ SYSTEM="""You are Aarogyam clinical document understanding AI. Your primary task
 
 Return ONLY JSON with:
 patient_credentials: name, age, gender, patient_id, uhid, referring_doctor, received_on, reported_on, phone.
+
+PATIENT DEMOGRAPHICS — SEMANTIC UNDERSTANDING:
+- Identify demographic information by meaning and visual context, not by a fixed text pattern or centre-specific label.
+- Age and sex/gender may be printed or handwritten together or separately, in any order, with arbitrary punctuation, abbreviations, symbols, columns, boxes, headers, or surrounding text.
+- Examples such as "45/M" are illustrative only. Do not require, search for, or assume that particular format.
+- If the document uses an unfamiliar centre-specific notation, infer the meaning from nearby labels, headings, field position, table structure and the document as a whole.
+- Separate age and gender into their own fields even when they appear combined in the source.
+- Normalize gender to "Male" or "Female" when clearly established; otherwise preserve visible values such as "M" or "F" rather than guessing.
+- Return age as the numeric age only when clearly supported.
+- Never infer age or gender from the patient's name, diagnosis, test values, or unrelated information.
+- Do not invent a demographic value merely because the schema has a field for it.
 report: department, title, test_type.
 result_sections: an array of sections. Each section has section and items. Each item has name and value, with optional unit, reference_range, flag, method, comment, result_type.
 
@@ -186,7 +197,7 @@ def normalize(data):
 def extract_with_cloudflare(paths):
     if not CLOUDFLARE_ACCOUNT_ID or not CLOUDFLARE_API_TOKEN:
         raise RuntimeError("Cloudflare AI is not configured. Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN.")
-    body={"messages":[{"role":"system","content":SYSTEM},{"role":"user","content":[{"type":"text","text":"Understand and extract the complete supplied clinical image/document into the requested JSON. The source may be any image, screenshot, photograph, scanned/printed report, analyzer display, WhatsApp image, or PDF page. Combine all supplied pages/images when there are multiple inputs. Do not invent missing data."}]+_parts(paths)}],"temperature":0,"max_tokens":6000,"chat_template_kwargs":{"enable_thinking":False}}
+    body={"messages":[{"role":"system","content":SYSTEM},{"role":"user","content":[{"type":"text","text":"Understand the supplied clinical image/document semantically and extract the complete visible clinical information into the requested JSON. Do not depend on fixed labels, fixed positions, regex-like patterns, or a particular centre's formatting. Patient demographics may use unfamiliar printed or handwritten conventions; determine their meaning from visual context and surrounding fields. The source may be any image, screenshot, photograph, scanned/printed report, analyzer display, WhatsApp image, or PDF page. Combine all supplied pages/images when there are multiple inputs. Do not invent missing data."}]+_parts(paths)}],"temperature":0,"max_tokens":6000,"chat_template_kwargs":{"enable_thinking":False}}
     r=requests.post(URL.format(CLOUDFLARE_ACCOUNT_ID,CLOUDFLARE_AI_MODEL),headers={"Authorization":"Bearer "+CLOUDFLARE_API_TOKEN,"Content-Type":"application/json","User-Agent":"Aarogyam/1.0"},json=body,timeout=CLOUDFLARE_AI_TIMEOUT)
     if r.status_code>=400: raise RuntimeError("Cloudflare AI request failed ("+str(r.status_code)+"): "+r.text[:600])
     payload=r.json()
