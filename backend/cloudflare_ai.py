@@ -159,9 +159,20 @@ def normalize(data):
         sections[section].append({k:v for k,v in t.items() if k not in {"section","abnormal_status","abnormal"}})
 
     result_sections=[{"section":s,"items":sections[s]} for s in order]
+    # Notebook-style reports commonly write age and sex together as "Age/Sex - 45/M".
+    age=_clean(p.get("age"))
+    gender=_clean(p.get("gender"))
+    combined=re.search(r"(?:age\s*/\s*(?:sex|gender)?\s*[-:=]?\s*)?(\d{1,3})\s*/\s*(male|female|m|f)\b", age, re.I)
+    if not combined:
+        combined=re.search(r"(?:age\s*/\s*(?:sex|gender)?\s*[-:=]?\s*)?(\d{1,3})\s*/\s*(male|female|m|f)\b", gender, re.I)
+    if combined:
+        age=combined.group(1)
+        gender=combined.group(2)
+    gender=re.sub(r"^\s*(?:sex|gender)\s*[:=-]?\s*", "", gender, flags=re.I).strip()
+
     return {
         "patient":{
-            "name":_clean(p.get("name")),"age":_clean(p.get("age")),"sex":_clean(p.get("gender")),
+            "name":_clean(p.get("name")),"age":age,"sex":gender,
             "phone":_clean(p.get("phone")),"code":_clean(p.get("patient_id")),"uhid":_clean(p.get("uhid")),
             "referred_by":_clean(p.get("referring_doctor")),"received_on":_clean(p.get("received_on")),"reported_on":_clean(p.get("reported_on"))
         },
