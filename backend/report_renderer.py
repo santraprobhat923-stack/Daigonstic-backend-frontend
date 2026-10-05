@@ -1097,7 +1097,19 @@ def _build_story(data, layout, available_width):
 
     story.extend(_narrative_note_block(narrative_notes, layout, styles))
 
-    if not tests and not narrative_notes:
+    # Report-level clinical interpretation/impression is a first-class field.
+    # It is editable during technician verification and must not be forced into
+    # the parameter table.
+    report_notes = []
+    interpretation = str(report.get("interpretation") or "").strip()
+    impression = str(report.get("impression") or "").strip()
+    if interpretation:
+        report_notes.append({"label": "Clinical Interpretation", "value": interpretation})
+    if impression and impression.casefold() != interpretation.casefold():
+        report_notes.append({"label": "Impression", "value": impression})
+    story.extend(_narrative_note_block(report_notes, layout, styles))
+
+    if not tests and not narrative_notes and not report_notes:
         story.append(
             Paragraph(
                 "No verified test results were entered.",
