@@ -225,7 +225,7 @@ def _mark_ocr_error(report_id, centre_id, message):
     finally:
         db.close()
 
-def _ocr_done(report_id, future):
+def _ocr_done(report_id, centre_id, future):
     try:
         exc=future.exception()
     except Exception as e:
@@ -234,7 +234,7 @@ def _ocr_done(report_id, future):
     if exc:
         logger.error("OCR worker crashed for report %s: %s", report_id, exc, exc_info=(type(exc), exc, exc.__traceback__))
         try:
-            _mark_ocr_error(report_id, None, str(exc))
+            _mark_ocr_error(report_id, centre_id, str(exc))
         except Exception:
             logger.exception("OCR worker crash handler failed for report %s", report_id)
 
@@ -381,7 +381,7 @@ def upload_reports(files:list[UploadFile]=File(...),c=Depends(current),db:Sessio
 
         created.append(report)
         future=OCR_EXECUTOR.submit(process_ocr,report.id,c.id,[str(stored)])
-        future.add_done_callback(lambda f, rid=report.id: _ocr_done(rid, f))
+        future.add_done_callback(lambda f, rid=report.id, cid=c.id: _ocr_done(rid, cid, f))
 
     return {
         "uploaded_count":len(created),
