@@ -1121,6 +1121,7 @@ def render_body(data, layout=None):
     body = BytesIO()
     left, right, _, _ = _metrics(layout)
     available_width = _page_size(layout)[0] - left - right
+    patient = data.get("patient") or {}
 
     doc = _ReportDocTemplate(
         body,
