@@ -74,21 +74,36 @@ async function upload(){
   setUploadStatus("Uploading document…","Creating the report job. Cloudflare AI will interpret the document in the background.");
   try{
     const j=await api("/api/reports/upload",{method:"POST",body:f});
-    const dup=j.duplicate_count||0,added=j.uploaded_count||files.length;
-    const createdReports=j.reports||[j.report];
+    const dup=j.duplicate_count||0,added=j.uploaded_count||0;
+    const createdReports=j.reports||[];
     const ids=createdReports.map(x=>"#"+x.id).join(", ");
-    setUploadStatus(
-      createdReports.length+" report job"+(createdReports.length===1?"":"s")+" created.",
-      ids+" "+(createdReports.length===1?"is":"are")+" being interpreted by AI in the background. You can upload more slips now.",
-      "success"
-    );
-    if(dup)setUploadStatus(
-      createdReports.length+" report job"+(createdReports.length===1?"":"s")+" created.",
-      ids+" · "+added+" new image"+(added===1?"":"s")+", "+dup+" duplicate"+(dup===1?"":"s")+" skipped.",
-      "success"
-    );
+    if(dup){
+      const duplicateLines=(j.duplicates||[]).map(x=>{
+        const ref=x.existing_report_id?" (already uploaded as report #"+x.existing_report_id+")":"";
+        return "• "+x.filename+ref;
+      }).join("\n");
+      alert(
+        "Duplicate file"+(dup===1?"":"s")+" detected\n\n"+
+        duplicateLines+
+        "\n\nThese duplicate file"+(dup===1?" was":"s were")+" not processed again."
+      );
+    }
+    if(added){
+      setUploadStatus(
+        added+" new report job"+(added===1?"":"s")+" created.",
+        ids+" "+(added===1?"is":"are")+" being interpreted by AI in the background. You can upload more slips now.",
+        "success"
+      );
+    }else if(dup){
+      setUploadStatus(
+        "No new report jobs created.",
+        "The selected file"+(dup===1?" was":"s were")+" already uploaded.",
+        "success"
+      );
+    }
     setTimeout(()=>pending(),450);
     intakeFiles=[];
+    renderSelectedFiles();
   }catch(e){
     setUploadStatus("Upload could not be completed.",e.message||"Please try the image again.","error");
     if(btn)btn.disabled=false;
