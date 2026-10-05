@@ -109,19 +109,28 @@ async function upload(){
     if(btn)btn.disabled=false;
   }
 }
-async function pending(force=false){
+async function pending(force=false,background=false){
   // Background polling must never interrupt an active technician review.
-  // Only an explicit user navigation to this page may clear the active review.
-  if(activeReviewId!==null&&!force)return;
-  if(force)activeReviewId=null;
+  // Polling refreshes only the queue contents, not the entire application shell.
+  if(activeReviewId!==null)return;
   if(pendingPollTimer){clearTimeout(pendingPollTimer);pendingPollTimer=null;}
   const generation=++pendingViewGeneration;
-  currentPage="pending";
+  if(!background){
+    if(force)activeReviewId=null;
+    currentPage="pending";
+  }
   const r=await api("/api/reports");
   if(generation!==pendingViewGeneration||currentPage!=="pending"||activeReviewId!==null)return;
   const jobs=r.filter(x=>["OCR_PROCESSING","OCR_REVIEW","OCR_ERROR","DUPLICATE"].includes(String(x.status||"").toUpperCase()));
-  app.innerHTML=shell('<div class="wrap"><div class="page-head"><div><div class="eyebrow">Technician queue</div><h1>Pending verification</h1><p>Upload many slips first, then review them here as OCR finishes.</p></div><div class="actions"><button class="primary" onclick="capture()">＋ Upload more</button></div></div><div class="card"><div id="pendingList">'+pendingRows(jobs)+'</div></div></div>');
-  if(jobs.some(x=>String(x.status||"").toUpperCase()==="OCR_PROCESSING"))pendingPollTimer=setTimeout(pending,1600);
+  const list=document.getElementById("pendingList");
+  if(background&&list){
+    list.innerHTML=pendingRows(jobs);
+  }else{
+    app.innerHTML=shell('<div class="wrap"><div class="page-head"><div><div class="eyebrow">Technician queue</div><h1>Pending verification</h1><p>Upload many slips first, then review them here as OCR finishes.</p></div><div class="actions"><button class="primary" onclick="capture()">＋ Upload more</button></div></div><div class="card"><div id="pendingList">'+pendingRows(jobs)+'</div></div></div>');
+  }
+  if(jobs.some(x=>String(x.status||"").toUpperCase()==="OCR_PROCESSING")){
+    pendingPollTimer=setTimeout(()=>pending(false,true),4000);
+  }
 }
 async function verifyJob(id){
   // Review is isolated to the selected report. Never fetch the whole queue
