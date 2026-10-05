@@ -1042,9 +1042,16 @@ class _ReportDocTemplate(BaseDocTemplate):
             patient_cfg.get("border"),
             colors.HexColor("#E2E5EC"),
         )
+        # Use the exact saved patient-block background and opacity.
+        # Preserve an explicit 0% opacity instead of falling back to the
+        # continuation-page default.
+        try:
+            background_opacity = max(0.0, min(100.0, float(patient_cfg.get("background_opacity", 100))))
+        except (TypeError, ValueError):
+            background_opacity = 100.0
         bg = _color_opacity(
             patient_cfg.get("background"),
-            min(100, float(patient_cfg.get("background_opacity", 88) or 88)),
+            background_opacity,
             colors.HexColor("#F5F6F8"),
         )
 
