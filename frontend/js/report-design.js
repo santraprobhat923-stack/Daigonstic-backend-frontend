@@ -15,9 +15,7 @@ const defaults={
   position:{x:0,y:0}
  },
  results:{
-  columns:["name","value","unit","reference_range"],font_size:9,header_size:7.5,section_font_size:8,
-  section_bold:true,section_style:"bold",section_align:"left",section_text:"#151A2D",
-  section_background:"#ECEAFB",section_title:"EXAMINATION RESULTS",show_grid:false,row_spacing:5,
+  columns:["name","value","unit","reference_range"],font_size:9,header_size:7.5,show_grid:false,row_spacing:5,
   report_title:"LABORATORY REPORT",report_title_align:"left",report_title_size:12,
   report_title_style:"bold",report_title_color:"#151A2D",report_title_line_color:"#5F52E8"
  },
@@ -263,7 +261,7 @@ async function init(){
   $("pageSize").value=l.page.size||"A4";$("patientStyle").value=l.patient.style||"card";$("patientCols").value=l.patient.columns||2;$("patientFont").value=l.patient.font_size||8.5;$("patientSpacing").value=l.patient.spacing??12;
   $("patientWidth").value=l.patient.width_percent??100;$("patientHeight").value=l.patient.height??0;$("patientLineSpacing").value=l.patient.line_spacing??1.25;$("patientRowGap").value=l.patient.row_gap??4;$("patientBg").value=l.patient.background||"#F5F6F8";$("patientBgOpacity").value=l.patient.background_opacity??100;$("patientTransparent").value=String(!!l.patient.transparent);
   $("patientTitleAlign").value=l.patient.title_align||"left";$("patientTitleSize").value=l.patient.title_size||9;$("patientTitleStyle").value=l.patient.title_style||"bold";$("patientTitleColor").value=l.patient.title_color||"#151A2D";
-  $("font").value=l.appearance.font||"Helvetica";$("fontSize").value=l.results.font_size||9;$("sectionSize").value=l.results.section_font_size||8;$("rowSpacing").value=l.results.row_spacing??5;$("gridStyle").checked=!!l.results.show_grid;
+  $("font").value=l.appearance.font||"Helvetica";$("fontSize").value=l.results.font_size||9;$("rowSpacing").value=l.results.row_spacing??5;$("gridStyle").checked=!!l.results.show_grid;
   $("sectionAlign").value=l.results.section_align||"left";$("sectionStyle").value=l.results.section_style|| (l.results.section_bold===false?"normal":"bold");$("sectionColor").value=l.results.section_text||"#151A2D";$("sectionBg").value=l.results.section_background||"#ECEAFB";
   $("reportTitleText").value=l.results.report_title||"LABORATORY REPORT";$("reportTitleAlign").value=l.results.report_title_align||"left";$("reportTitleSize").value=l.results.report_title_size||12;$("reportTitleStyle").value=l.results.report_title_style||"bold";$("reportTitleColor").value=l.results.report_title_color||"#151A2D";$("reportTitleLineColor").value=l.results.report_title_line_color||"#5F52E8";
   const savedVisible=Array.isArray(l.patient.visible)&&l.patient.visible.length?l.patient.visible:defaults.patient.visible;
