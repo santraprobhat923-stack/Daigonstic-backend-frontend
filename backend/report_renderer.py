@@ -1081,48 +1081,6 @@ def _build_story(data, layout, available_width):
     story = []
     story.extend(_patient_block(patient, layout, styles, available_width))
 
-    text_color = _color(
-        layout["appearance"].get("text"),
-        colors.HexColor("#151A2D"),
-    )
-    accent = _color(
-        layout["appearance"].get("accent"),
-        colors.HexColor("#5F52E8"),
-    )
-
-    department = report.get("department") or data.get("department") or ""
-    title = layout["results"].get("report_title") or report.get("title") or data.get("title") or "LABORATORY REPORT"
-
-    # The report always starts immediately after the patient credentials.
-    # Do not apply a separate report-top offset here; patient positioning
-    # already reserves the required flow height.
-    if department:
-        story.append(Paragraph(_safe_text(department).upper(), styles["department"]))
-
-    report_style = ParagraphStyle(
-        "report_title_dynamic",
-        parent=styles["report_title"],
-        fontName=_styled_font(layout, layout["results"].get("report_title_style", "bold")),
-        fontSize=float(layout["results"].get("report_title_size", 12)) * 0.75,
-        leading=(float(layout["results"].get("report_title_size", 12)) + 2) * 0.75,
-        textColor=_color(layout["results"].get("report_title_color"), text_color),
-        alignment=_alignment(layout["results"].get("report_title_align", "left")),
-    )
-    title_table = Table(
-        [[Paragraph(_safe_text(title).upper(), report_style)]],
-        colWidths=[available_width],
-        hAlign="LEFT",
-        style=TableStyle([
-            ("LINEBELOW", (0, 0), (-1, -1), 2 * 0.75, _color(layout["results"].get("report_title_line_color"), accent)),
-            ("LEFTPADDING", (0, 0), (-1, -1), 0),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-            ("TOPPADDING", (0, 0), (-1, -1), 0),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 6 * 0.75),
-        ]),
-    )
-    story.append(title_table)
-    story.append(Spacer(1, 11 * 0.75))
-
     tests = data.get("tests") or []
     tests, narrative_notes = _extract_narrative_notes(tests)
     grouped_tests = _group_tests(tests, layout)
