@@ -174,7 +174,11 @@ def normalize(data):
     result_sections=[{"section":s,"items":sections[s]} for s in order]
     # Notebook-style reports commonly write age and sex together as "Age/Sex - 45/M".
     age=_clean(p.get("age"))
+    dob=_clean(p.get("date_of_birth") or p.get("dob"))
     gender=_clean(p.get("gender"))
+    if re.fullmatch(r"(?:\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}[/-]\d{1,2}[/-]\d{1,2}|\d{1,2}\s+[A-Za-z]{3,9}\s+\d{2,4})", age):
+        dob = dob or age
+        age = ""
     combined=re.search(r"(?:age\s*/\s*(?:sex|gender)?\s*[-:=]?\s*)?(\d{1,3})\s*/\s*(male|female|m|f)\b", age, re.I)
     if not combined:
         combined=re.search(r"(?:age\s*/\s*(?:sex|gender)?\s*[-:=]?\s*)?(\d{1,3})\s*/\s*(male|female|m|f)\b", gender, re.I)
@@ -185,7 +189,7 @@ def normalize(data):
 
     return {
         "patient":{
-            "name":_clean(p.get("name")),"age":age,"sex":gender,
+            "name":_clean(p.get("name")),"age":age,"sex":gender,"date_of_birth":dob,
             "phone":_clean(p.get("phone")),"code":_clean(p.get("patient_id")),"uhid":_clean(p.get("uhid")),
             "referred_by":_clean(p.get("referring_doctor")),"received_on":_clean(p.get("received_on")),"reported_on":_clean(p.get("reported_on"))
         },
