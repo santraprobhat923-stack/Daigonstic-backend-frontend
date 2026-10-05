@@ -601,13 +601,29 @@ def _result_table(title, rows, layout, styles, available_width):
 
     text_style = styles["table_cell"]
     value_style = styles["table_value"]
+    # Normal result values remain regular weight. Only findings explicitly
+    # identified as abnormal/critical by the extraction data are bold.
     abnormal_value_style = ParagraphStyle(
         "table_abnormal_value",
-        parent=value_style,
+        parent=text_style,
         fontName=_styled_font(layout, "bold"),
         textColor=colors.HexColor("#111827"),
     )
     header_style = styles["table_header"]
+
+    def _is_critical_result(row):
+        # Cloudflare AI normalization provides abnormal/abnormal_status.
+        # Tesseract/technician data may instead carry an explicit flag.
+        if bool(row.get("abnormal")):
+            return True
+        status = str(row.get("abnormal_status") or "").strip().upper()
+        if status in {"LOW", "HIGH", "ABNORMAL", "CRITICAL"}:
+            return True
+        flag = str(row.get("flag") or "").strip().lower()
+        return flag in {
+            "h", "high", "l", "low", "abnormal", "critical",
+            "crit", "positive", "reactive", "alert",
+        }
 
     if mode == "narrative":
         narrative_style = ParagraphStyle(
@@ -707,8 +723,8 @@ def _result_table(title, rows, layout, styles, available_width):
             Paragraph(
                 _safe_text(row.get(key, "")),
                 abnormal_value_style
-                if key == "value" and row.get("abnormal")
-                else (value_style if key == "value" else text_style),
+                if key == "value" and _is_critical_result(row)
+                else text_style,
             )
             for key in columns
         ])
