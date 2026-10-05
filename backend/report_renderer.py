@@ -1023,53 +1023,6 @@ def _build_story(data, layout, available_width):
     grouped_tests = _group_tests(tests, layout)
     dynamic_test_type = _dynamic_test_type(data, grouped_tests)
 
-    # Keep the designer's editable section title, while the actual clinical
-    # test type remains dynamic and comes from the extracted report.
-    section_title = str(
-        layout["results"].get("section_title") or "EXAMINATION RESULTS"
-    ).strip()
-    if section_title:
-        section_label_style = ParagraphStyle(
-            "report_section_label",
-            parent=styles["section"],
-            fontName=_styled_font(
-                layout,
-                layout["results"].get("section_style", "bold"),
-            ),
-            fontSize=float(layout["results"].get("section_font_size", 8)) * 0.75,
-            leading=(float(layout["results"].get("section_font_size", 8)) + 1) * 0.75,
-            textColor=_color(
-                layout["results"].get("section_text"),
-                text_color,
-            ),
-            alignment=_alignment(
-                layout["results"].get("section_align", "left")
-            ),
-        )
-        story.append(
-            Table(
-                [[Paragraph(_safe_text(section_title).upper(), section_label_style)]],
-                colWidths=[available_width],
-                hAlign="LEFT",
-                style=TableStyle([
-                    (
-                        "BACKGROUND",
-                        (0, 0),
-                        (-1, -1),
-                        _color(
-                            layout["results"].get("section_background"),
-                            colors.HexColor("#ECEAFB"),
-                        ),
-                    ),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 8 * 0.75),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 8 * 0.75),
-                    ("TOPPADDING", (0, 0), (-1, -1), 5 * 0.75),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5 * 0.75),
-                ]),
-            )
-        )
-        story.append(Spacer(1, 3 * 0.75))
-
     test_type_style = ParagraphStyle(
         "dynamic_test_type",
         parent=styles["department"],
