@@ -179,11 +179,6 @@ function renderPreview(){
  rt.style.borderBottomColor=$( "reportTitleLineColor").value;
  const sec=$( "reportSectionBlock");
  const previewTestType=String(r.test_type||r.testType||r.examination||r.title||"").trim();
- sec.textContent=previewTestType||"TEST TYPE";
- sec.style.fontFamily=previewFont;sec.style.textAlign=$( "sectionAlign").value;sec.style.fontSize=$( "sectionSize").value+"px";sec.style.color=$( "sectionColor").value;
- sec.style.background=$( "sectionBg").value;
- sec.style.fontWeight=["bold","bold_italic"].includes($( "sectionStyle").value)?"700":"400";
- sec.style.fontStyle=["italic","bold_italic"].includes($( "sectionStyle").value)?"italic":"normal";
  const resultFontSize=Math.max(1,Number($( "fontSize").value)||9);
  document.querySelectorAll(".tr").forEach(x=>{
   x.style.fontSize=resultFontSize+"px";
