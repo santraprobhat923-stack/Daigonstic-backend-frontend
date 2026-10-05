@@ -898,7 +898,8 @@ class _PageCountCanvas(canvas.Canvas):
         header = str(manual.get("header_text") or "").strip()
         footer = str(manual.get("footer_text") or "").strip()
         if header:
-            y = page_h - max(14, float(layout.get("page", {}).get("top", 132)) - 18)
+            # Keep manual header above the compact overflow-page patient band.
+            y = page_h - 24
             for line in header.splitlines()[:3]:
                 self.drawCentredString(page_w / 2, y, line[:180])
                 y -= 9
