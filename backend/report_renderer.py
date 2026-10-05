@@ -1,5 +1,6 @@
 from io import BytesIO
 from pathlib import Path
+from copy import deepcopy
 import json
 from xml.sax.saxutils import escape
 
@@ -914,29 +915,57 @@ class _PageCountCanvas(canvas.Canvas):
 
 
 class _ReportDocTemplate(BaseDocTemplate):
-    def __init__(self, stream, layout, **kwargs):
+    def __init__(self, stream, layout, patient=None, **kwargs):
         self._layout = layout
+        self._patient = patient or {}
         left, right, top, bottom = _metrics(layout)
         frame = Frame(
-            left,
-            bottom,
-            _page_size(layout)[0] - left - right,
-            top - bottom,
-            id="report_body",
-            leftPadding=0,
-            rightPadding=0,
-            topPadding=0,
-            bottomPadding=0,
+            left, bottom, _page_size(layout)[0] - left - right, top - bottom,
+            id="report_body", leftPadding=0, rightPadding=0,
+            topPadding=0, bottomPadding=0,
         )
         self._pagesize = _page_size(layout)
         super().__init__(stream, pagesize=self._pagesize, **kwargs)
         self.addPageTemplates([
-            PageTemplate(
-                id="report",
-                frames=[frame],
-            )
+            PageTemplate(id="report", frames=[frame], onPage=self._draw_secondary_patient)
         ])
 
+    def _draw_secondary_patient(self, canv, doc):
+        """Draw only compact patient identity on overflow pages."""
+        if canv.getPageNumber() <= 1:
+            return
+        page_w, page_h = self._pagesize
+        page = self._layout.get("page") or {}
+        top = max(0.0, float(page.get("top", 132) or 0))
+        left = max(0.0, float(page.get("left", 52) or 0))
+        right = max(0.0, float(page.get("right", 52) or 0))
+        if top < 42:
+            return
+        patient = self._patient
+        name = str(patient.get("name") or "").strip()
+        code = str(patient.get("code") or patient.get("patient_id") or "").strip()
+        uhid = str(patient.get("uhid") or "").strip()
+        identity = "  •  ".join(x for x in (
+            f"Patient: {name}" if name else "",
+            f"ID: {code}" if code else "",
+            f"UHID: {uhid}" if uhid else "",
+        ) if x)
+        if not identity:
+            return
+        text = _color(self._layout.get("appearance", {}).get("text"), colors.HexColor("#151A2D"))
+        border = _color((self._layout.get("patient") or {}).get("border"), colors.HexColor("#E2E5EC"))
+        bg = _color_opacity((self._layout.get("patient") or {}).get("background"), 88, colors.HexColor("#F5F6F8"))
+        frame_top = page_h - top
+        box_h = 24
+        box_y = frame_top + 5
+        canv.saveState()
+        canv.setFillColor(bg)
+        canv.setStrokeColor(border)
+        canv.roundRect(left, box_y, page_w - left - right, box_h, 3, fill=1, stroke=1)
+        canv.setFillColor(text)
+        canv.setFont(_font_name(self._layout, bold=True), 7.5)
+        canv.drawString(left + 8, box_y + 14, identity[:180])
+        canv.restoreState()
 
 def _build_story(data, layout, available_width):
     styles = _paragraph_styles(layout)
@@ -1095,6 +1124,7 @@ def render_body(data, layout=None):
     doc = _ReportDocTemplate(
         body,
         layout=layout,
+        patient=patient,
         rightMargin=0,
         leftMargin=0,
         topMargin=0,
@@ -1130,7 +1160,9 @@ def make_pdf_body_on_template(template_path, data, out, layout=None):
 
         for index, overlay_page in enumerate(overlay.pages):
             base_page = base.pages[index] if index < len(base.pages) else base.pages[-1]
-            page = base_page
+            # PyPDF2 mutates PageObject in place. Clone the clean template
+            # page so page 1's merged body can never leak into page 2.
+            page = deepcopy(base_page)
             page.merge_page(overlay_page)
             writer.add_page(page)
 
