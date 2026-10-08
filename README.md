@@ -745,3 +745,44 @@ The goal of this cycle is to validate **Part 1: multi-centre isolation + multi-i
 Whenever workflow, architecture, API, database, deployment, OCR behaviour, PDF rendering, report-design behaviour or other important implementation changes are made, update this README in the same change.
 
 The README remains the handover source of truth for future Aarogyam conversations.
+
+
+## Latest tenant-isolation fix — 8 Oct 2026
+
+A cross-centre letterhead isolation issue was identified during multi-centre testing.
+
+### Problem found
+
+Centre-specific authentication and the `Centre.report_layout` settings are already tenant-scoped, but legacy/shared `template_path` values could cause two centre records to point at the same physical letterhead PDF. In that situation, uploading a new letterhead for Centre 2 could overwrite the same physical file previously used by Centre 1.
+
+### Fix
+
+The backend now enforces a strict per-centre template storage boundary:
+
+`storage/centre_<id>/template.pdf`
+
+- New letterhead uploads always write to the authenticated centre's own directory.
+- Template preview reads only the authenticated centre's expected private path.
+- Template deletion deletes only that centre's private template.
+- A startup migration repairs legacy/shared template references by copying the currently referenced template into the centre's private path when needed, then updating the database reference.
+- The renderer continues to receive the authenticated centre's template path, so generated PDFs remain centre-specific.
+
+This is a backend/storage isolation fix; the report designer UI and saved styling were not redesigned.
+
+### Required multi-centre regression test
+
+Before considering Part 1 tenant isolation complete:
+
+1. Login as Centre 1 and upload Letterhead A.
+2. Open the report designer and confirm Letterhead A appears.
+3. Sign out and login as Centre 2.
+4. Confirm Centre 2 does not inherit Centre 1's letterhead/settings.
+5. Upload Letterhead B for Centre 2.
+6. Return to Centre 1 and confirm Letterhead A is still present.
+7. Return to Centre 2 and confirm Letterhead B is present.
+8. Generate one PDF from each centre and confirm each PDF uses its own letterhead.
+9. Repeat the same swap test with report settings and logo where applicable.
+
+The expected rule is: **one centre can never overwrite, read, preview, delete, or render another centre's tenant-owned letterhead.**
+
+This fix is part of the Part 1 multi-centre validation checkpoint.
