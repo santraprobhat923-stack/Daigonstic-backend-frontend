@@ -52,6 +52,36 @@ def migrate_legacy_sqlite():
             if "last_error" not in cols: conn.execute(text("ALTER TABLE wa_jobs ADD COLUMN last_error TEXT DEFAULT ''"))
             if "next_attempt_at" not in cols: conn.execute(text("ALTER TABLE wa_jobs ADD COLUMN next_attempt_at DATETIME"))
 migrate_legacy_sqlite()
+
+def migrate_centre_template_storage():
+    """Repair legacy/shared template paths so each centre owns its own file."""
+    db=SessionLocal()
+    try:
+        centres=db.query(Centre).all()
+        changed=False
+        for centre in centres:
+            expected=STORAGE_DIR/f"centre_{centre.id}"/"template.pdf"
+            expected.parent.mkdir(parents=True,exist_ok=True)
+            current=Path(centre.template_path or "")
+            if current.is_file() and current.resolve()!=expected.resolve():
+                # Preserve the currently referenced template as this centre's
+                # private copy before switching the database reference.
+                if not expected.exists():
+                    shutil.copy2(current,expected)
+                centre.template_path=str(expected)
+                changed=True
+            elif expected.is_file() and centre.template_path!=str(expected):
+                centre.template_path=str(expected)
+                changed=True
+        if changed:
+            db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Centre template storage migration failed")
+    finally:
+        db.close()
+
+migrate_centre_template_storage()
 app=FastAPI(title="Aarogyam")
 app.mount("/static",StaticFiles(directory="frontend"),name="static")
 app.mount("/superadmin-static",StaticFiles(directory="frontend"),name="superadmin-static")
@@ -533,6 +563,8 @@ def template(file:UploadFile=File(...),c=Depends(current),db:Session=Depends(get
     is_word=name.endswith((".doc",".docx"))
     if not (is_pdf or is_word or name.endswith(allowed_image)):
         raise HTTPException(400,"Template must be PDF, Word (DOC/DOCX), or image (PNG/JPG/WEBP)")
+    # Letterheads are always stored in a centre-specific namespace.
+    # Never reuse an existing template_path supplied by the browser/database.
     p=STORAGE_DIR/f"centre_{c.id}"/"template.pdf"
     p.parent.mkdir(parents=True,exist_ok=True)
     raw=file.file.read()
@@ -577,7 +609,8 @@ def template(file:UploadFile=File(...),c=Depends(current),db:Session=Depends(get
 
 @app.delete("/api/settings/template")
 def delete_template(c=Depends(current),db:Session=Depends(get_db)):
-    p=Path(c.template_path or "")
+    # Delete only this centre's private template.
+    p=STORAGE_DIR/f"centre_{c.id}"/"template.pdf"
     if p.exists() and p.is_file():
         try: p.unlink()
         except Exception: pass
@@ -587,12 +620,14 @@ def delete_template(c=Depends(current),db:Session=Depends(get_db)):
 
 @app.get("/api/settings/template")
 def template_preview(c=Depends(current)):
-    p=Path(c.template_path or "")
+    # Read only this centre's private template path.
+    p=STORAGE_DIR/f"centre_{c.id}"/"template.pdf"
     if not p.exists(): raise HTTPException(404,"No centre template uploaded")
     return FileResponse(p,media_type="application/pdf",filename="centre-template.pdf")
 @app.get("/api/settings/template/preview")
 def template_preview_image(c=Depends(current)):
-    p=Path(c.template_path or "")
+    # Read only this centre's private template path.
+    p=STORAGE_DIR/f"centre_{c.id}"/"template.pdf"
     if not p.exists(): raise HTTPException(404,"No centre template uploaded")
     try:
         doc=pymupdf.open(str(p))
